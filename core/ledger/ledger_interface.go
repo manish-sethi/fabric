@@ -125,3 +125,5 @@ type TxSimulator interface {
 	// of information in different way in order to support different data-models or optimize the information representations.
 	GetTxSimulationResults() ([]byte, error)
 }
+
+// Test change for branch
