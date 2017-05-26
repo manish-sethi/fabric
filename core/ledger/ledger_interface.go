@@ -170,10 +170,10 @@ type PrivacyEnabledPeerLedger interface {
 	PeerLedger
 	GetPrivateSimulationResults(txid string) []*EndorserPrivateSimulationResults
 	PutPrivateSimulationResults(txid, endorserid string, privateSimulationResults []byte)
-	PurgeTempData(blockNum uint64) error
+	PurgeTransientData(blockNum uint64) error
 	PurgePrivateData(blockNum uint64) error
 	PrivateDataMinBlockNum() (uint64, error)
-	TempDataMinBlockNum() (uint64, error)
+	TransientDataMinBlockNum() (uint64, error)
 }
 
 // EndorserPrivateSimulationResults captures the deatils of the simulation results specific to an endorser
