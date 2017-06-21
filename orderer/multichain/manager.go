@@ -22,6 +22,7 @@ import (
 	"github.com/hyperledger/fabric/common/config"
 	"github.com/hyperledger/fabric/common/configtx"
 	configtxapi "github.com/hyperledger/fabric/common/configtx/api"
+	"github.com/hyperledger/fabric/common/policies"
 	"github.com/hyperledger/fabric/orderer/ledger"
 	cb "github.com/hyperledger/fabric/protos/common"
 	"github.com/hyperledger/fabric/protos/utils"
@@ -56,7 +57,11 @@ type configResources struct {
 }
 
 func (cr *configResources) SharedConfig() config.Orderer {
-	return cr.OrdererConfig()
+	oc, ok := cr.OrdererConfig()
+	if !ok {
+		logger.Panicf("[channel %s] has no orderer configuration", cr.ChainID())
+	}
+	return oc
 }
 
 type ledgerResources struct {
@@ -104,7 +109,7 @@ func NewManagerImpl(ledgerFactory ledger.Factory, consenters map[string]Consente
 		}
 		configTx := getConfigTx(rl)
 		if configTx == nil {
-			logger.Panicf("Could not find config transaction for chain %s", chainID)
+			logger.Panic("Programming error, configTx should never be nil here")
 		}
 		ledgerResources := ml.newLedgerResources(configTx)
 		chainID := ledgerResources.ChainID()
@@ -118,7 +123,7 @@ func NewManagerImpl(ledgerFactory ledger.Factory, consenters map[string]Consente
 				consenters,
 				signer)
 			logger.Infof("Starting with system channel %s and orderer type %s", chainID, chain.SharedConfig().ConsensusType())
-			ml.chains[string(chainID)] = chain
+			ml.chains[chainID] = chain
 			ml.systemChannelID = chainID
 			ml.systemChannel = chain
 			// We delay starting this chain, as it might try to copy and replace the chains map via newChain before the map is fully built
@@ -129,14 +134,14 @@ func NewManagerImpl(ledgerFactory ledger.Factory, consenters map[string]Consente
 				ledgerResources,
 				consenters,
 				signer)
-			ml.chains[string(chainID)] = chain
+			ml.chains[chainID] = chain
 			chain.start()
 		}
 
 	}
 
 	if ml.systemChannelID == "" {
-		logger.Panicf("No system chain found")
+		logger.Panicf("No system chain found.  If bootstrapping, does your system channel contain a consortiums group definition?")
 	}
 
 	return ml
@@ -186,11 +191,6 @@ func (ml *multiLedger) newChain(configtx *cb.Envelope) {
 	chainID := ledgerResources.ChainID()
 
 	logger.Infof("Created and starting new chain %s", chainID)
-
-	cs.lastConfigSeq = cs.Sequence()
-	// The sequence number on the genesis block of the system channel will be 0.
-	// The sequence number on the genesis block of every non-system channel will be 1.
-	logger.Debugf("[channel: %s] Last config set to %d", chainID, cs.lastConfigSeq)
 
 	newChains[string(chainID)] = cs
 	cs.start()
@@ -267,12 +267,16 @@ func (ml *multiLedger) NewChannelConfig(envConfigUpdate *cb.Envelope) (configtxa
 		return nil, fmt.Errorf("Proposed configuration has no application group members, but consortium contains members")
 	}
 
-	for orgName := range configUpdate.WriteSet.Groups[config.ApplicationGroupKey].Groups {
-		consortiumGroup, ok := systemChannelGroup.Groups[config.ConsortiumsGroupKey].Groups[consortium.Name].Groups[orgName]
-		if !ok {
-			return nil, fmt.Errorf("Attempted to include a member which is not in the consortium")
+	// If the consortium has no members, allow the source request to contain arbitrary members
+	// Otherwise, require that the supplied members are a subset of the consortium members
+	if len(systemChannelGroup.Groups[config.ConsortiumsGroupKey].Groups[consortium.Name].Groups) > 0 {
+		for orgName := range configUpdate.WriteSet.Groups[config.ApplicationGroupKey].Groups {
+			consortiumGroup, ok := systemChannelGroup.Groups[config.ConsortiumsGroupKey].Groups[consortium.Name].Groups[orgName]
+			if !ok {
+				return nil, fmt.Errorf("Attempted to include a member which is not in the consortium")
+			}
+			applicationGroup.Groups[orgName] = consortiumGroup
 		}
-		applicationGroup.Groups[orgName] = consortiumGroup
 	}
 
 	channelGroup := cb.NewConfigGroup()
@@ -301,5 +305,17 @@ func (ml *multiLedger) NewChannelConfig(envConfigUpdate *cb.Envelope) (configtxa
 		},
 	}, msgVersion, epoch)
 
-	return configtx.NewManagerImpl(templateConfig, configtx.NewInitializer(), nil)
+	initializer := configtx.NewInitializer()
+
+	// This is a very hacky way to disable the sanity check logging in the policy manager
+	// for the template configuration, but it is the least invasive near a release
+	pm, ok := initializer.PolicyManager().(*policies.ManagerImpl)
+	if ok {
+		pm.SuppressSanityLogMessages = true
+		defer func() {
+			pm.SuppressSanityLogMessages = false
+		}()
+	}
+
+	return configtx.NewManagerImpl(templateConfig, initializer, nil)
 }

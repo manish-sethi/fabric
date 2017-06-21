@@ -59,6 +59,12 @@ func createCmd(cf *ChannelCmdFactory) *cobra.Command {
 			return create(cmd, args, cf)
 		},
 	}
+	flagList := []string{
+		"channelID",
+		"file",
+		"timeout",
+	}
+	attachFlags(createCmd, flagList)
 
 	return createCmd
 }
@@ -87,7 +93,7 @@ func createChannelFromConfigTx(configTxFileName string) (*cb.Envelope, error) {
 	return utils.UnmarshalEnvelope(cftx)
 }
 
-func sanityCheckAndSignChannelCreateTx(envConfigUpdate *cb.Envelope) (*cb.Envelope, error) {
+func sanityCheckAndSignConfigTx(envConfigUpdate *cb.Envelope) (*cb.Envelope, error) {
 	payload, err := utils.ExtractPayload(envConfigUpdate)
 	if err != nil {
 		return nil, InvalidCreateTx("bad payload")
@@ -150,7 +156,7 @@ func sendCreateChainTransaction(cf *ChannelCmdFactory) error {
 		}
 	}
 
-	if chCrtEnv, err = sanityCheckAndSignChannelCreateTx(chCrtEnv); err != nil {
+	if chCrtEnv, err = sanityCheckAndSignConfigTx(chCrtEnv); err != nil {
 		return err
 	}
 

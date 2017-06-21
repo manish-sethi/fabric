@@ -34,8 +34,8 @@ import (
 	"github.com/hyperledger/fabric/orderer/kafka"
 	"github.com/hyperledger/fabric/orderer/ledger"
 	"github.com/hyperledger/fabric/orderer/localconfig"
+	"github.com/hyperledger/fabric/orderer/metadata"
 	"github.com/hyperledger/fabric/orderer/multichain"
-	"github.com/hyperledger/fabric/orderer/sbft"
 	"github.com/hyperledger/fabric/orderer/solo"
 	cb "github.com/hyperledger/fabric/protos/common"
 	ab "github.com/hyperledger/fabric/protos/orderer"
@@ -45,29 +45,50 @@ import (
 	"github.com/hyperledger/fabric/common/localmsp"
 	mspmgmt "github.com/hyperledger/fabric/msp/mgmt"
 	logging "github.com/op/go-logging"
+	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 var logger = logging.MustGetLogger("orderer/main")
 
+//command line flags
+var (
+	app = kingpin.New("orderer", "Hyperledger Fabric orderer node")
+
+	start   = app.Command("start", "Start the orderer node").Default()
+	version = app.Command("version", "Show version information")
+)
+
 func main() {
-	conf := config.Load()
-	initializeLoggingLevel(conf)
-	initializeProfilingService(conf)
-	grpcServer := initializeGrpcServer(conf)
-	initializeLocalMsp(conf)
-	signer := localmsp.NewSigner()
-	manager := initializeMultiChainManager(conf, signer)
-	server := NewServer(manager, signer)
-	ab.RegisterAtomicBroadcastServer(grpcServer.Server(), server)
-	logger.Info("Beginning to serve requests")
-	grpcServer.Start()
+
+	kingpin.Version("0.0.1")
+	switch kingpin.MustParse(app.Parse(os.Args[1:])) {
+
+	// "start" command
+	case start.FullCommand():
+		logger.Infof("Starting %s", metadata.GetVersionInfo())
+		conf := config.Load()
+		initializeLoggingLevel(conf)
+		initializeProfilingService(conf)
+		grpcServer := initializeGrpcServer(conf)
+		initializeLocalMsp(conf)
+		signer := localmsp.NewSigner()
+		manager := initializeMultiChainManager(conf, signer)
+		server := NewServer(manager, signer)
+		ab.RegisterAtomicBroadcastServer(grpcServer.Server(), server)
+		logger.Info("Beginning to serve requests")
+		grpcServer.Start()
+	// "version" command
+	case version.FullCommand():
+		fmt.Println(metadata.GetVersionInfo())
+	}
+
 }
 
 // Set the logging level
 func initializeLoggingLevel(conf *config.TopLevel) {
 	flogging.InitFromSpec(conf.General.LogLevel)
 	if conf.Kafka.Verbose {
-		sarama.Logger = log.New(os.Stdout, "[sarama] ", log.Lshortfile)
+		sarama.Logger = log.New(os.Stdout, "[sarama] ", log.Ldate|log.Lmicroseconds|log.Lshortfile)
 	}
 }
 
@@ -193,8 +214,7 @@ func initializeMultiChainManager(conf *config.TopLevel, signer crypto.LocalSigne
 
 	consenters := make(map[string]multichain.Consenter)
 	consenters["solo"] = solo.New()
-	consenters["kafka"] = kafka.New(conf.Kafka.Version, conf.Kafka.Retry, conf.Kafka.TLS)
-	consenters["sbft"] = sbft.New(makeSbftConsensusConfig(conf), makeSbftStackConfig(conf))
+	consenters["kafka"] = kafka.New(conf.Kafka.TLS, conf.Kafka.Retry, conf.Kafka.Version)
 
 	return multichain.NewManagerImpl(lf, consenters, signer)
 }

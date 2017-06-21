@@ -23,6 +23,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"math/rand"
+	"net"
 	"os"
 	"strings"
 	"sync"
@@ -105,25 +106,37 @@ func (*naiveSecProvider) VerifyByChannel(_ common.ChainID, _ api.PeerIdentityTyp
 
 func newCommInstance(port int, sec api.MessageCryptoService) (Comm, error) {
 	endpoint := fmt.Sprintf("localhost:%d", port)
-	inst, err := NewCommInstanceWithServer(port, identity.NewIdentityMapper(sec), []byte(endpoint), nil)
+	id := []byte(endpoint)
+	inst, err := NewCommInstanceWithServer(port, identity.NewIdentityMapper(sec, id), id, nil)
 	return inst, err
 }
 
-func handshaker(endpoint string, comm Comm, t *testing.T, sigMutator func([]byte) []byte, pkiIDmutator func([]byte) []byte, mutualTLS bool) <-chan proto.ReceivedMessage {
+type msgMutator func(*proto.SignedGossipMessage) *proto.SignedGossipMessage
+
+type tlsType int
+
+const (
+	none tlsType = iota
+	oneWayTLS
+	mutualTLS
+)
+
+func handshaker(endpoint string, comm Comm, t *testing.T, connMutator msgMutator, connType tlsType) <-chan proto.ReceivedMessage {
 	c := &commImpl{}
 	cert := GenerateCertificatesOrPanic()
 	tlsCfg := &tls.Config{
 		InsecureSkipVerify: true,
 	}
-
-	if mutualTLS {
+	if connType == mutualTLS {
 		tlsCfg.Certificates = []tls.Certificate{cert}
 	}
-
 	ta := credentials.NewTLS(tlsCfg)
-
+	secureOpts := grpc.WithTransportCredentials(ta)
+	if connType == none {
+		secureOpts = grpc.WithInsecure()
+	}
 	acceptChan := comm.Accept(acceptAll)
-	conn, err := grpc.Dial("localhost:9611", grpc.WithTransportCredentials(&authCreds{tlsCreds: ta}), grpc.WithBlock(), grpc.WithTimeout(time.Second))
+	conn, err := grpc.Dial("localhost:9611", secureOpts, grpc.WithBlock(), grpc.WithTimeout(time.Second))
 	assert.NoError(t, err, "%v", err)
 	if err != nil {
 		return nil
@@ -133,49 +146,34 @@ func handshaker(endpoint string, comm Comm, t *testing.T, sigMutator func([]byte
 	assert.NoError(t, err, "%v", err)
 	if err != nil {
 		return nil
-	} // cert.Certificate[0]
+	}
 
 	var clientCertHash []byte
-	if mutualTLS {
+	if len(tlsCfg.Certificates) > 0 {
 		clientCertHash = certHashFromRawCert(tlsCfg.Certificates[0].Certificate[0])
 	}
 
 	pkiID := common.PKIidType(endpoint)
-	if pkiIDmutator != nil {
-		pkiID = common.PKIidType(pkiIDmutator([]byte(endpoint)))
-	}
 	assert.NoError(t, err, "%v", err)
-	msg := c.createConnectionMsg(pkiID, clientCertHash, []byte(endpoint), func(msg []byte) ([]byte, error) {
-		if !mutualTLS {
-			return msg, nil
-		}
+	msg, _ := c.createConnectionMsg(pkiID, clientCertHash, []byte(endpoint), func(msg []byte) ([]byte, error) {
 		mac := hmac.New(sha256.New, hmacKey)
 		mac.Write(msg)
 		return mac.Sum(nil), nil
 	})
-
-	if sigMutator != nil {
-		msg.Envelope.Signature = sigMutator(msg.Envelope.Signature)
-	}
-
+	// Mutate connection message to test negative paths
+	msg = connMutator(msg)
+	// Send your own connection message
 	stream.Send(msg.Envelope)
+	// Wait for connection message from the other side
 	envelope, err := stream.Recv()
+	if err != nil {
+		return acceptChan
+	}
 	assert.NoError(t, err, "%v", err)
 	msg, err = envelope.ToGossipMessage()
 	assert.NoError(t, err, "%v", err)
-	if sigMutator == nil {
-		hash := extractCertificateHashFromContext(stream.Context())
-		expectedMsg := c.createConnectionMsg(common.PKIidType("localhost:9611"), hash, []byte("localhost:9611"), func(msg []byte) ([]byte, error) {
-			mac := hmac.New(sha256.New, hmacKey)
-			mac.Write(msg)
-			return mac.Sum(nil), nil
-		})
-		if mutualTLS {
-			assert.Equal(t, expectedMsg.Envelope.Signature, msg.Envelope.Signature)
-		}
-
-	}
 	assert.Equal(t, []byte("localhost:9611"), msg.GetConn().PkiId)
+	assert.Equal(t, extractCertificateHashFromContext(stream.Context()), msg.GetConn().TlsCertHash)
 	msg2Send := createGossipMsg()
 	nonce := uint64(rand.Int())
 	msg2Send.Nonce = nonce
@@ -202,58 +200,131 @@ func TestViperConfig(t *testing.T) {
 
 func TestHandshake(t *testing.T) {
 	t.Parallel()
-	comm, _ := newCommInstance(9611, naiveSec)
+	signer := func(msg []byte) ([]byte, error) {
+		mac := hmac.New(sha256.New, hmacKey)
+		mac.Write(msg)
+		return mac.Sum(nil), nil
+	}
+	mutator := func(msg *proto.SignedGossipMessage) *proto.SignedGossipMessage {
+		return msg
+	}
+	assertPositivePath := func(msg proto.ReceivedMessage, endpoint string) {
+		expectedPKIID := common.PKIidType(endpoint)
+		assert.Equal(t, expectedPKIID, msg.GetConnectionInfo().ID)
+		assert.Equal(t, api.PeerIdentityType(endpoint), msg.GetConnectionInfo().Identity)
+		assert.NotNil(t, msg.GetConnectionInfo().Auth)
+		assert.True(t, msg.GetConnectionInfo().IsAuthenticated())
+		sig, _ := (&naiveSecProvider{}).Sign(msg.GetConnectionInfo().Auth.SignedData)
+		assert.Equal(t, sig, msg.GetConnectionInfo().Auth.Signature)
+	}
+
+	// Positive path 1 - check authentication without TLS
+	ll, err := net.Listen("tcp", fmt.Sprintf("%s:%d", "", 9611))
+	assert.NoError(t, err)
+	s := grpc.NewServer()
+	go s.Serve(ll)
+
+	id := []byte("localhost:9611")
+	idMapper := identity.NewIdentityMapper(naiveSec, id)
+	inst, err := NewCommInstance(s, nil, idMapper, api.PeerIdentityType("localhost:9611"), func() []grpc.DialOption {
+		return []grpc.DialOption{grpc.WithInsecure()}
+	})
+	assert.NoError(t, err)
+	var msg proto.ReceivedMessage
+
+	acceptChan := handshaker("localhost:9608", inst, t, mutator, none)
+	select {
+	case <-time.After(time.Duration(time.Second * 4)):
+		assert.FailNow(t, "Didn't receive a message, seems like handshake failed")
+	case msg = <-acceptChan:
+	}
+	assert.Equal(t, common.PKIidType("localhost:9608"), msg.GetConnectionInfo().ID)
+	assert.Equal(t, api.PeerIdentityType("localhost:9608"), msg.GetConnectionInfo().Identity)
+	assert.Nil(t, msg.GetConnectionInfo().Auth)
+	assert.False(t, msg.GetConnectionInfo().IsAuthenticated())
+
+	inst.Stop()
+	s.Stop()
+	ll.Close()
+	time.Sleep(time.Second)
+
+	comm, err := newCommInstance(9611, naiveSec)
+	assert.NoError(t, err)
 	defer comm.Stop()
+	// Positive path 2: initiating peer sends its own certificate
+	acceptChan = handshaker("localhost:9609", comm, t, mutator, mutualTLS)
 
-	acceptChan := handshaker("localhost:9610", comm, t, nil, nil, true)
-	time.Sleep(2 * time.Second)
-	assert.Equal(t, 1, len(acceptChan))
-	msg := <-acceptChan
-	expectedPKIID := common.PKIidType("localhost:9610")
-	assert.Equal(t, expectedPKIID, msg.GetConnectionInfo().ID)
-	assert.Equal(t, api.PeerIdentityType("localhost:9610"), msg.GetConnectionInfo().Identity)
-	assert.NotNil(t, msg.GetConnectionInfo().Auth)
-	assert.True(t, msg.GetConnectionInfo().IsAuthenticated())
-	sig, _ := (&naiveSecProvider{}).Sign(msg.GetConnectionInfo().Auth.SignedData)
-	assert.Equal(t, sig, msg.GetConnectionInfo().Auth.Signature)
-	// negative path, nothing should be read from the channel because the signature is wrong
-	mutateSig := func(b []byte) []byte {
-		if b[0] == 0 {
-			b[0] = 1
-		} else {
-			b[0] = 0
+	select {
+	case <-time.After(time.Second * 2):
+		assert.FailNow(t, "Didn't receive a message, seems like handshake failed")
+	case msg = <-acceptChan:
+	}
+	assertPositivePath(msg, "localhost:9609")
+
+	// Negative path: initiating peer doesn't send its own certificate
+	acceptChan = handshaker("localhost:9610", comm, t, mutator, oneWayTLS)
+	time.Sleep(time.Second)
+	assert.Equal(t, 0, len(acceptChan))
+	// Negative path, signature is wrong
+	mutator = func(msg *proto.SignedGossipMessage) *proto.SignedGossipMessage {
+		msg.Signature = append(msg.Signature, 0)
+		return msg
+	}
+	acceptChan = handshaker("localhost:9612", comm, t, mutator, mutualTLS)
+	time.Sleep(time.Second)
+	assert.Equal(t, 0, len(acceptChan))
+
+	// Negative path, the PKIid doesn't match the identity
+	mutator = func(msg *proto.SignedGossipMessage) *proto.SignedGossipMessage {
+		msg.GetConn().PkiId = []byte("localhost:9650")
+		// Sign the message again
+		msg.Sign(signer)
+		return msg
+	}
+	acceptChan = handshaker("localhost:9613", comm, t, mutator, mutualTLS)
+	time.Sleep(time.Second)
+	assert.Equal(t, 0, len(acceptChan))
+
+	// Negative path, the cert hash isn't what is expected
+	mutator = func(msg *proto.SignedGossipMessage) *proto.SignedGossipMessage {
+		msg.GetConn().TlsCertHash = append(msg.GetConn().TlsCertHash, 0)
+		msg.Sign(signer)
+		return msg
+	}
+	acceptChan = handshaker("localhost:9615", comm, t, mutator, mutualTLS)
+	time.Sleep(time.Second)
+	assert.Equal(t, 0, len(acceptChan))
+
+	// Negative path, no PKI-ID was sent
+	mutator = func(msg *proto.SignedGossipMessage) *proto.SignedGossipMessage {
+		msg.GetConn().PkiId = nil
+		msg.Sign(signer)
+		return msg
+	}
+	acceptChan = handshaker("localhost:9616", comm, t, mutator, mutualTLS)
+	time.Sleep(time.Second)
+	assert.Equal(t, 0, len(acceptChan))
+
+	// Negative path, connection message is of a different type
+	mutator = func(msg *proto.SignedGossipMessage) *proto.SignedGossipMessage {
+		msg.Content = &proto.GossipMessage_Empty{
+			Empty: &proto.Empty{},
 		}
-		return b
+		msg.Sign(signer)
+		return msg
 	}
-	acceptChan = handshaker("localhost:9612", comm, t, mutateSig, nil, true)
+	acceptChan = handshaker("localhost:9617", comm, t, mutator, mutualTLS)
 	time.Sleep(time.Second)
 	assert.Equal(t, 0, len(acceptChan))
 
-	// negative path, nothing should be read from the channel because the PKIid doesn't match the identity
-	mutatePKIID := func(b []byte) []byte {
-		return []byte("localhost:9650")
+	// Negative path, the peer didn't respond to the handshake in due time
+	mutator = func(msg *proto.SignedGossipMessage) *proto.SignedGossipMessage {
+		time.Sleep(time.Second * 5)
+		return msg
 	}
-	acceptChan = handshaker("localhost:9613", comm, t, nil, mutatePKIID, true)
+	acceptChan = handshaker("localhost:9618", comm, t, mutator, mutualTLS)
 	time.Sleep(time.Second)
 	assert.Equal(t, 0, len(acceptChan))
-
-	// Now we test for a handshake without mutual TLS
-	// The first time should fail
-	acceptChan = handshaker("localhost:9614", comm, t, nil, nil, false)
-	select {
-	case <-acceptChan:
-		assert.Fail(t, "Should not have successfully authenticated to remote peer")
-	case <-time.After(time.Second):
-	}
-
-	// And the second time should succeed
-	comm.(*commImpl).skipHandshake = true
-	acceptChan = handshaker("localhost:9615", comm, t, nil, nil, false)
-	select {
-	case <-acceptChan:
-	case <-time.After(time.Second * 10):
-		assert.Fail(t, "skipHandshake flag should have authorized the authentication")
-	}
 }
 
 func TestBasic(t *testing.T) {
@@ -285,7 +356,8 @@ func TestProdConstructor(t *testing.T) {
 	srv, lsnr, dialOpts, certHash := createGRPCLayer(20000)
 	defer srv.Stop()
 	defer lsnr.Close()
-	comm1, _ := NewCommInstance(srv, &peerIdentity, identity.NewIdentityMapper(naiveSec), []byte("localhost:20000"), dialOpts)
+	id := []byte("localhost:20000")
+	comm1, _ := NewCommInstance(srv, &peerIdentity, identity.NewIdentityMapper(naiveSec, id), id, dialOpts)
 	comm1.(*commImpl).selfCertHash = certHash
 	go srv.Serve(lsnr)
 
@@ -293,7 +365,8 @@ func TestProdConstructor(t *testing.T) {
 	srv, lsnr, dialOpts, certHash = createGRPCLayer(30000)
 	defer srv.Stop()
 	defer lsnr.Close()
-	comm2, _ := NewCommInstance(srv, &peerIdentity, identity.NewIdentityMapper(naiveSec), []byte("localhost:30000"), dialOpts)
+	id = []byte("localhost:30000")
+	comm2, _ := NewCommInstance(srv, &peerIdentity, identity.NewIdentityMapper(naiveSec, id), id, dialOpts)
 	comm2.(*commImpl).selfCertHash = certHash
 	go srv.Serve(lsnr)
 	defer comm1.Stop()
@@ -343,14 +416,14 @@ func TestCloseConn(t *testing.T) {
 	}
 	ta := credentials.NewTLS(tlsCfg)
 
-	conn, err := grpc.Dial("localhost:1611", grpc.WithTransportCredentials(&authCreds{tlsCreds: ta}), grpc.WithBlock(), grpc.WithTimeout(time.Second))
+	conn, err := grpc.Dial("localhost:1611", grpc.WithTransportCredentials(ta), grpc.WithBlock(), grpc.WithTimeout(time.Second))
 	assert.NoError(t, err, "%v", err)
 	cl := proto.NewGossipClient(conn)
 	stream, err := cl.GossipStream(context.Background())
 	assert.NoError(t, err, "%v", err)
 	c := &commImpl{}
-	hash := certHashFromRawCert(tlsCfg.Certificates[0].Certificate[0])
-	connMsg := c.createConnectionMsg(common.PKIidType("pkiID"), hash, api.PeerIdentityType("pkiID"), func(msg []byte) ([]byte, error) {
+	tlsCertHash := certHashFromRawCert(tlsCfg.Certificates[0].Certificate[0])
+	connMsg, _ := c.createConnectionMsg(common.PKIidType("pkiID"), tlsCertHash, api.PeerIdentityType("pkiID"), func(msg []byte) ([]byte, error) {
 		mac := hmac.New(sha256.New, hmacKey)
 		mac.Write(msg)
 		return mac.Sum(nil), nil
@@ -428,9 +501,13 @@ func TestResponses(t *testing.T) {
 	defer comm1.Stop()
 	defer comm2.Stop()
 
+	wg := sync.WaitGroup{}
+
 	msg := createGossipMsg()
+	wg.Add(1)
 	go func() {
 		inChan := comm1.Accept(acceptAll)
+		wg.Done()
 		for m := range inChan {
 			reply := createGossipMsg()
 			reply.Nonce = m.GetGossipMessage().Nonce + 1
@@ -440,9 +517,9 @@ func TestResponses(t *testing.T) {
 	expectedNOnce := uint64(msg.Nonce + 1)
 	responsesFromComm1 := comm2.Accept(acceptAll)
 
-	ticker := time.NewTicker(time.Duration(6000) * time.Millisecond)
+	ticker := time.NewTicker(10 * time.Second)
+	wg.Wait()
 	comm2.Send(msg, remotePeer(8611))
-	time.Sleep(time.Duration(100) * time.Millisecond)
 
 	select {
 	case <-ticker.C:
@@ -596,8 +673,24 @@ func TestPresumedDead(t *testing.T) {
 	t.Parallel()
 	comm1, _ := newCommInstance(4611, naiveSec)
 	comm2, _ := newCommInstance(4612, naiveSec)
-	go comm1.Send(createGossipMsg(), remotePeer(4612))
-	<-comm2.Accept(acceptAll)
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		wg.Wait()
+		comm1.Send(createGossipMsg(), remotePeer(4612))
+	}()
+
+	ticker := time.NewTicker(time.Duration(10) * time.Second)
+	acceptCh := comm2.Accept(acceptAll)
+	wg.Done()
+	select {
+	case <-acceptCh:
+		ticker.Stop()
+	case <-ticker.C:
+		assert.Fail(t, "Didn't get first message")
+	}
+
 	comm2.Stop()
 	go func() {
 		for i := 0; i < 5; i++ {
@@ -606,7 +699,7 @@ func TestPresumedDead(t *testing.T) {
 		}
 	}()
 
-	ticker := time.NewTicker(time.Second * time.Duration(3))
+	ticker = time.NewTicker(time.Second * time.Duration(3))
 	select {
 	case <-ticker.C:
 		assert.Fail(t, "Didn't get a presumed dead message within a timely manner")
@@ -618,13 +711,14 @@ func TestPresumedDead(t *testing.T) {
 }
 
 func createGossipMsg() *proto.SignedGossipMessage {
-	return (&proto.GossipMessage{
+	msg, _ := (&proto.GossipMessage{
 		Tag:   proto.GossipMessage_EMPTY,
 		Nonce: uint64(rand.Int()),
 		Content: &proto.GossipMessage_DataMsg{
 			DataMsg: &proto.DataMessage{},
 		},
 	}).NoopSign()
+	return msg
 }
 
 func remotePeer(port int) *RemotePeer {

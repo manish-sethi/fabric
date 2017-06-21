@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 
 	ledger "github.com/hyperledger/fabric/orderer/ledger"
 	cb "github.com/hyperledger/fabric/protos/common"
@@ -32,6 +33,7 @@ import (
 
 var logger = logging.MustGetLogger("orderer/jsonledger")
 var closedChan chan struct{}
+var fileLock sync.Mutex
 
 func init() {
 	closedChan = make(chan struct{})
@@ -49,17 +51,23 @@ type cursor struct {
 }
 
 type jsonLedger struct {
-	directory      string
-	fqFormatString string
-	height         uint64
-	signal         chan struct{}
-	lastHash       []byte
-	marshaler      *jsonpb.Marshaler
+	directory string
+	height    uint64
+	signal    chan struct{}
+	lastHash  []byte
+	marshaler *jsonpb.Marshaler
 }
 
 // readBlock returns the block or nil, and whether the block was found or not, (nil,true) generally indicates an irrecoverable problem
 func (jl *jsonLedger) readBlock(number uint64) (*cb.Block, bool) {
-	file, err := os.Open(jl.blockFilename(number))
+	name := jl.blockFilename(number)
+
+	// In case of ongoing write, reading the block file may result in `unexpected EOF` error.
+	// Therefore, we use file mutex here to prevent this race condition.
+	fileLock.Lock()
+	defer fileLock.Unlock()
+
+	file, err := os.Open(name)
 	if err == nil {
 		defer file.Close()
 		block := &cb.Block{}
@@ -114,10 +122,9 @@ func (jl *jsonLedger) Iterator(startPosition *ab.SeekPosition) (ledger.Iterator,
 			return &ledger.NotFoundErrorIterator{}, 0
 		}
 		return &cursor{jl: jl, blockNumber: start.Specified.Number}, start.Specified.Number
+	default:
+		return &ledger.NotFoundErrorIterator{}, 0
 	}
-
-	// This line should be unreachable, but the compiler requires it
-	return &ledger.NotFoundErrorIterator{}, 0
 }
 
 // Height returns the number of blocks on the ledger
@@ -145,11 +152,17 @@ func (jl *jsonLedger) Append(block *cb.Block) error {
 
 // writeBlock commits a block to disk
 func (jl *jsonLedger) writeBlock(block *cb.Block) {
-	file, err := os.Create(jl.blockFilename(block.Header.Number))
+	name := jl.blockFilename(block.Header.Number)
+
+	fileLock.Lock()
+	defer fileLock.Unlock()
+
+	file, err := os.Create(name)
 	if err != nil {
 		panic(err)
 	}
 	defer file.Close()
+
 	err = jl.marshaler.Marshal(file, block)
 	logger.Debugf("Wrote block %d", block.Header.Number)
 	if err != nil {

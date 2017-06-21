@@ -17,7 +17,8 @@ It's recommended for first-time users to begin by going through the
 components and the basic transaction flow.  Once comfortable, continue
 exploring the library for demos, technical specifications, APIs, etc.
 
-Before diving in, watch how Fabric is `Building a Blockchain for Business <https://www.youtube.com/watch?v=EKa5Gh9whgU>`__ .
+Before diving in, watch how Fabric is `Building a Blockchain for Business
+<https://www.youtube.com/watch?v=EKa5Gh9whgU>`__ .
 
 
 
@@ -25,31 +26,26 @@ Before diving in, watch how Fabric is `Building a Blockchain for Business <https
 
 .. toctree::
    :maxdepth: 2
-   :caption: Get the Code
-
-   releases
-
-.. toctree::
-   :maxdepth: 2
    :caption: Getting Started
 
+   prereqs
    getting_started
+   samples
 
 .. toctree::
    :maxdepth: 2
    :caption: Key Concepts
 
-   overview
+   blockchain
    capabilities
    fabric_model
    usecases
-
 
 .. toctree::
    :maxdepth: 2
    :caption: Tutorials
 
-   demos
+   build_network
    chaincode
    videos
 
@@ -58,11 +54,13 @@ Before diving in, watch how Fabric is `Building a Blockchain for Business <https
    :caption: Operations Guide
 
    best_practices
+   msp
    configtx
    configtxgen
    cc-packaging-and-signing
+   endorsement-policies
    error-handling
-   Setup/logging-control
+   logging-control
 
 .. toctree::
    :maxdepth: 2
@@ -70,10 +68,9 @@ Before diving in, watch how Fabric is `Building a Blockchain for Business <https
 
    arch-deep-dive
    txflow
-   Setup/ca-setup
-   endorsement-policies
-   nodesdk
-   orderingservice
+   Fabric CA's User Guide <http://hyperledger-fabric-ca.readthedocs.io/en/latest>
+   fabric-sdks
+   kafka
    channels
    ledger
    readwrite
@@ -83,17 +80,12 @@ Before diving in, watch how Fabric is `Building a Blockchain for Business <https
    :maxdepth: 2
    :caption: Troubleshooting and FAQs
 
-   troubleshooting
-   FAQ/architecture_FAQ
-   FAQ/chaincode_FAQ
-   FAQ/identity_management_FAQ
+   Fabric-FAQ
 
 .. toctree::
    :maxdepth: 2
-   :caption: Appendix
+   :caption: Contributing
 
-   glossary
-   releases
    CONTRIBUTING
    MAINTAINERS
    jira_navigation
@@ -106,7 +98,16 @@ Before diving in, watch how Fabric is `Building a Blockchain for Business <https
    Gerrit/best-practices
    testing
    Style-guides/go-style
+
+.. toctree::
+   :maxdepth: 2
+   :caption: Appendix
+
+   glossary
+   releases
    questions
-   quality
    status
    license
+
+.. Licensed under Creative Commons Attribution 4.0 International License
+   https://creativecommons.org/licenses/by/4.0/

@@ -104,7 +104,9 @@ func copyGroup(source *cb.ConfigGroup, target *cb.ConfigGroup) error {
 	for key, group := range source.Groups {
 		_, ok := target.Groups[key]
 		if !ok {
-			target.Groups[key] = cb.NewConfigGroup()
+			newGroup := cb.NewConfigGroup()
+			newGroup.ModPolicy = group.ModPolicy
+			target.Groups[key] = newGroup
 		}
 
 		err := copyGroup(group, target.Groups[key])
@@ -151,7 +153,7 @@ type modPolicySettingTemplate struct {
 }
 
 // NewModPolicySettingTemplate wraps another template and sets the ModPolicy of
-// every ConfigGroup/ConfigValue/ConfigPolicy to modPolicy
+// every ConfigGroup/ConfigValue/ConfigPolicy without a modPolicy to modPolicy
 func NewModPolicySettingTemplate(modPolicy string, template Template) Template {
 	return &modPolicySettingTemplate{
 		modPolicy: modPolicy,
@@ -160,13 +162,21 @@ func NewModPolicySettingTemplate(modPolicy string, template Template) Template {
 }
 
 func setGroupModPolicies(modPolicy string, group *cb.ConfigGroup) {
-	group.ModPolicy = modPolicy
+	if group.ModPolicy == "" {
+		group.ModPolicy = modPolicy
+	}
 
 	for _, value := range group.Values {
+		if value.ModPolicy != "" {
+			continue
+		}
 		value.ModPolicy = modPolicy
 	}
 
 	for _, policy := range group.Policies {
+		if policy.ModPolicy != "" {
+			continue
+		}
 		policy.ModPolicy = modPolicy
 	}
 
@@ -234,36 +244,44 @@ func (cct *channelCreationTemplate) Envelope(channelID string) (*cb.ConfigUpdate
 
 // MakeChainCreationTransaction is a handy utility function for creating new chain transactions using the underlying Template framework
 func MakeChainCreationTransaction(channelID string, consortium string, signer msp.SigningIdentity, orgs ...string) (*cb.Envelope, error) {
-	sSigner, err := signer.Serialize()
-	if err != nil {
-		return nil, fmt.Errorf("Serialization of identity failed, err %s", err)
-	}
-
 	newChainTemplate := NewChainCreationTemplate(consortium, orgs)
 	newConfigUpdateEnv, err := newChainTemplate.Envelope(channelID)
 	if err != nil {
 		return nil, err
 	}
-	newConfigUpdateEnv.Signatures = []*cb.ConfigSignature{&cb.ConfigSignature{
-		SignatureHeader: utils.MarshalOrPanic(utils.MakeSignatureHeader(sSigner, utils.CreateNonceOrPanic())),
-	}}
 
-	newConfigUpdateEnv.Signatures[0].Signature, err = signer.Sign(util.ConcatenateBytes(newConfigUpdateEnv.Signatures[0].SignatureHeader, newConfigUpdateEnv.ConfigUpdate))
-	if err != nil {
-		return nil, err
+	payloadSignatureHeader := &cb.SignatureHeader{}
+	if signer != nil {
+		sSigner, err := signer.Serialize()
+		if err != nil {
+			return nil, fmt.Errorf("Serialization of identity failed, err %s", err)
+		}
+
+		newConfigUpdateEnv.Signatures = []*cb.ConfigSignature{&cb.ConfigSignature{
+			SignatureHeader: utils.MarshalOrPanic(utils.MakeSignatureHeader(sSigner, utils.CreateNonceOrPanic())),
+		}}
+
+		newConfigUpdateEnv.Signatures[0].Signature, err = signer.Sign(util.ConcatenateBytes(newConfigUpdateEnv.Signatures[0].SignatureHeader, newConfigUpdateEnv.ConfigUpdate))
+		if err != nil {
+			return nil, err
+		}
+
+		payloadSignatureHeader = utils.MakeSignatureHeader(sSigner, utils.CreateNonceOrPanic())
 	}
 
 	payloadChannelHeader := utils.MakeChannelHeader(cb.HeaderType_CONFIG_UPDATE, msgVersion, channelID, epoch)
-	payloadSignatureHeader := utils.MakeSignatureHeader(sSigner, utils.CreateNonceOrPanic())
 	utils.SetTxID(payloadChannelHeader, payloadSignatureHeader)
 	payloadHeader := utils.MakePayloadHeader(payloadChannelHeader, payloadSignatureHeader)
 	payload := &cb.Payload{Header: payloadHeader, Data: utils.MarshalOrPanic(newConfigUpdateEnv)}
 	paylBytes := utils.MarshalOrPanic(payload)
 
-	// sign the payload
-	sig, err := signer.Sign(paylBytes)
-	if err != nil {
-		return nil, err
+	var sig []byte
+	if signer != nil {
+		// sign the payload
+		sig, err = signer.Sign(paylBytes)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return &cb.Envelope{Payload: paylBytes, Signature: sig}, nil

@@ -141,11 +141,7 @@ func InitGossipServiceCustomDeliveryFactory(peerIdentity []byte, endpoint string
 
 		logger.Info("Initialize gossip with endpoint", endpoint, "and bootstrap set", bootPeers)
 
-		idMapper := identity.NewIdentityMapper(mcs)
-		if err := idMapper.Put(mcs.GetPKIidOfCert(peerIdentity), peerIdentity); err != nil {
-			logger.Panic("Failed associating self PKIID to cert:", err)
-		}
-
+		idMapper := identity.NewIdentityMapper(mcs, peerIdentity)
 		gossip := integration.NewGossipComponent(peerIdentity, endpoint, s, secAdv,
 			mcs, idMapper, secureDialOpts, bootPeers...)
 		gossipServiceInstance = &gossipServiceImpl{
@@ -266,7 +262,7 @@ func (g *gossipServiceImpl) Stop() {
 	}
 
 	for chainID, electionService := range g.leaderElection {
-		logger.Info("Stopping leader election for %s", chainID)
+		logger.Infof("Stopping leader election for %s", chainID)
 		electionService.Stop()
 	}
 	g.gossipSvc.Stop()
@@ -293,10 +289,12 @@ func (g *gossipServiceImpl) amIinChannel(myOrg string, config Config) bool {
 func (g *gossipServiceImpl) onStatusChangeFactory(chainID string, committer blocksprovider.LedgerInfo) func(bool) {
 	return func(isLeader bool) {
 		if isLeader {
+			logger.Info("Elected as a leader, starting delivery service for channel", chainID)
 			if err := g.deliveryService.StartDeliverForChannel(chainID, committer); err != nil {
 				logger.Error("Delivery service is not able to start blocks delivery for chain, due to", err)
 			}
 		} else {
+			logger.Info("Renounced leadership, stopping delivery service for channel", chainID)
 			if err := g.deliveryService.StopDeliverForChannel(chainID); err != nil {
 				logger.Error("Delivery service is not able to stop blocks delivery for chain, due to", err)
 			}

@@ -51,6 +51,8 @@ import (
 	"github.com/spf13/viper"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
+
+	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc/credentials"
 )
 
@@ -286,7 +288,7 @@ func invoke(chainID string, spec *pb.ChaincodeSpec) (*pb.Proposal, *pb.ProposalR
 
 	resp, err := endorserServer.ProcessProposal(context.Background(), signedProp)
 	if err != nil {
-		return nil, nil, "", nil, fmt.Errorf("Error endorsing %s: %s\n", spec.ChaincodeId, err)
+		return nil, nil, "", nil, err
 	}
 
 	return prop, resp, txID, nonce, err
@@ -477,7 +479,27 @@ func TestDeployAndInvoke(t *testing.T) {
 		return
 	}
 
-	fmt.Printf("Invoke test passed\n")
+	// Test chaincode endorsement failure when invalid function name supplied
+	f = "invokeinvalid"
+	invokeArgs = append([]string{f}, args...)
+	spec = &pb.ChaincodeSpec{Type: 1, ChaincodeId: chaincodeID, Input: &pb.ChaincodeInput{Args: util.ToChaincodeArgs(invokeArgs...)}}
+	prop, resp, txid, nonce, err = invoke(chainID, spec)
+	if err == nil {
+		t.Fail()
+		t.Logf("expecting fabric to report error from chaincode failure")
+		chaincode.GetChain().Stop(ctxt, cccid, &pb.ChaincodeDeploymentSpec{ChaincodeSpec: &pb.ChaincodeSpec{ChaincodeId: chaincodeID}})
+		return
+	} else if _, ok := err.(*chaincodeError); !ok {
+		t.Fail()
+		t.Logf("expecting chaincode error but found %v", err)
+		chaincode.GetChain().Stop(ctxt, cccid, &pb.ChaincodeDeploymentSpec{ChaincodeSpec: &pb.ChaincodeSpec{ChaincodeId: chaincodeID}})
+		return
+	}
+
+	if resp != nil {
+		assert.Equal(t, int32(500), resp.Response.Status, "Unexpected response status")
+	}
+
 	t.Logf("Invoke test passed")
 
 	chaincode.GetChain().Stop(ctxt, cccid, &pb.ChaincodeDeploymentSpec{ChaincodeSpec: &pb.ChaincodeSpec{ChaincodeId: chaincodeID}})
@@ -535,7 +557,6 @@ func TestDeployAndUpgrade(t *testing.T) {
 		return
 	}
 
-	fmt.Printf("Upgrade test passed\n")
 	t.Logf("Upgrade test passed")
 
 	chaincode.GetChain().Stop(ctxt, cccid1, &pb.ChaincodeDeploymentSpec{ChaincodeSpec: &pb.ChaincodeSpec{ChaincodeId: chaincodeID1}})
@@ -602,7 +623,6 @@ func TestWritersACLFail(t *testing.T) {
 		return
 	}
 
-	fmt.Println("TestWritersACLFail passed")
 	t.Logf("TestWritersACLFail passed")
 
 	chaincode.GetChain().Stop(ctxt, cccid, &pb.ChaincodeDeploymentSpec{ChaincodeSpec: &pb.ChaincodeSpec{ChaincodeId: chaincodeID}})
@@ -647,7 +667,6 @@ func TestAdminACLFail(t *testing.T) {
 		return
 	}
 
-	fmt.Println("TestAdminACLFail passed")
 	t.Logf("TestATestAdminACLFailCLFail passed")
 
 	chaincode.GetChain().Stop(ctxt, cccid, &pb.ChaincodeDeploymentSpec{ChaincodeSpec: &pb.ChaincodeSpec{ChaincodeId: chaincodeID}})

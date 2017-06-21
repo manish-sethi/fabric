@@ -23,11 +23,15 @@ Profiles:
     SampleInsecureSolo:
         Orderer:
             <<: *OrdererDefaults
-        Application:
-            <<: *ApplicationDefaults
         Consortiums:
             SampleConsortium:
                 Organizations:
+
+    # SampleNoConsortium is very similar to SampleInsecureSolo, except it
+    # does not define Consortiums.
+    SampleNoConsortium:
+        Orderer:
+            <<: *OrdererDefaults
 
     # SampleInsecureKafka defines a configuration that differs from the
     # SampleInsecureSolo one only in that is uses the Kafka-based orderer.
@@ -35,11 +39,24 @@ Profiles:
         Orderer:
             <<: *OrdererDefaults
             OrdererType: kafka
-        Application:
-            <<: *ApplicationDefaults
         Consortiums:
             SampleConsortium:
                 Organizations:
+
+    # SampleDevModeSolo defines a configuration which uses the Solo orderer,
+    # contains the sample MSP as both orderer and consortium member, and
+    # requires only basic membership for admin privileges
+    SampleDevModeSolo:
+        Orderer:
+            <<: *OrdererDefaults
+            Organizations:
+                - <<: *SampleOrg
+                  AdminPrincipal: Role.MEMBER
+        Consortiums:
+            SampleConsortium:
+                Organizations:
+                    - <<: *SampleOrg
+                      AdminPrincipal: Role.MEMBER
 
     # SampleSingleMSPSolo defines a configuration which uses the Solo orderer,
     # and contains a single MSP definition (the MSP sampleconfig).
@@ -47,10 +64,6 @@ Profiles:
     SampleSingleMSPSolo:
         Orderer:
             <<: *OrdererDefaults
-            Organizations:
-                - *SampleOrg
-        Application:
-            <<: *ApplicationDefaults
             Organizations:
                 - *SampleOrg
         Consortiums:
@@ -103,22 +116,6 @@ Organizations:
         # ADMIN and role type MEMBER respectively.
         AdminPrincipal: Role.ADMIN
 
-        # BCCSP: Select which crypto implementation or library to use for the
-        # blockchain crypto service provider.
-        BCCSP:
-            Default: SW
-            SW:
-                # TODO: The default Hash and Security level needs refactoring to
-                # be fully configurable. Changing these defaults requires
-                # coordination SHA2 is hardcoded in several places, not only
-                # BCCSP.
-                Hash: SHA2
-                Security: 256
-                # Location of key store. If this is unset, a location will be
-                # chosen using: 'MSPDir'/keystore
-                FileKeyStore:
-                    KeyStore:
-
         AnchorPeers:
             # AnchorPeers defines the location of peers which can be used for
             # cross-org gossip communication. Note, this value is only encoded
@@ -156,8 +153,8 @@ Orderer: &OrdererDefaults
         # Absolute Max Bytes: The absolute maximum number of bytes allowed for
         # the serialized messages in a batch. If the "kafka" OrdererType is
         # selected, set 'message.max.bytes' and 'replica.fetch.max.bytes' on the
-        # Kafka brokers to a value that is equal to or larger than this one.
-        AbsoluteMaxBytes: 99 MB
+        # Kafka brokers to a value that is larger than this one.
+        AbsoluteMaxBytes: 10 MB
 
         # Preferred Max Bytes: The preferred maximum number of bytes allowed for
         # the serialized messages in a batch. A message larger than the

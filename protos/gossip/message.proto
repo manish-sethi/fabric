@@ -1,3 +1,7 @@
+// Copyright IBM Corp. All Rights Reserved.
+//
+// SPDX-License-Identifier: Apache-2.0
+//
 syntax = "proto3";
 
 option go_package = "github.com/hyperledger/fabric/protos/gossip" ;
@@ -126,9 +130,6 @@ message StateInfo {
     // channel_MAC is an authentication code that proves
     // that the peer that sent this message knows
     // the name of the channel.
-    // The channel name that this message relates to
-    // can only be computed by a peer that has joined
-    // the channel
     bytes channel_MAC  = 4;
 }
 
@@ -143,9 +144,6 @@ message StateInfoPullRequest {
     // channel_MAC is an authentication code that proves
     // that the peer that sent this message knows
     // the name of the channel.
-    // The channel name that this message relates to
-    // can only be computed by a peer that has joined
-    // the channel
     bytes channel_MAC  = 1;
 }
 
@@ -153,9 +151,9 @@ message StateInfoPullRequest {
 // Whenever a peer connects to another peer, it handshakes
 // with it by sending this message that proves its identity
 message ConnEstablish {
-    bytes pki_id = 1;
-    bytes cert  = 2;
-    bytes hash  = 3;
+    bytes pki_id          = 1;
+    bytes identity        = 2;
+    bytes tls_cert_hash   = 3;
 }
 
 // PeerIdentity defines the identity of the peer
@@ -191,7 +189,7 @@ message GossipHello {
     PullMsgType msg_type = 3;
 }
 
-// DataUpdate is the the final message in the pull phase
+// DataUpdate is the final message in the pull phase
 // sent from the receiver to the initiator
 message DataUpdate {
     uint64 nonce                = 1;

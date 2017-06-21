@@ -214,9 +214,10 @@ func newGossipConfig(id int, boot ...int) *gossip.Config {
 
 // Create gossip instance
 func newGossipInstance(config *gossip.Config, mcs api.MessageCryptoService) gossip.Gossip {
-	idMapper := identity.NewIdentityMapper(mcs)
+	id := api.PeerIdentityType(config.InternalEndpoint)
+	idMapper := identity.NewIdentityMapper(mcs, id)
 	return gossip.NewGossipServiceWithServer(config, &orgCryptoService{}, mcs,
-		idMapper, []byte(config.InternalEndpoint), nil)
+		idMapper, id, nil)
 }
 
 // Create new instance of KVLedger to be used for testing
@@ -269,8 +270,9 @@ func TestNilDirectMsg(t *testing.T) {
 	defer p.shutdown()
 	p.s.(*GossipStateProviderImpl).handleStateRequest(nil)
 	p.s.(*GossipStateProviderImpl).directMessage(nil)
+	sMsg, _ := p.s.(*GossipStateProviderImpl).stateRequestMessage(uint64(10), uint64(8)).NoopSign()
 	req := &comm.ReceivedMessageImpl{
-		SignedGossipMessage: p.s.(*GossipStateProviderImpl).stateRequestMessage(uint64(10), uint64(8)).NoopSign(),
+		SignedGossipMessage: sMsg,
 	}
 	p.s.(*GossipStateProviderImpl).directMessage(req)
 }

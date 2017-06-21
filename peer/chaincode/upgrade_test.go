@@ -65,9 +65,10 @@ func TestUpgradeCmd(t *testing.T) {
 	}
 
 	cmd := upgradeCmd(mockCF)
-	AddFlags(cmd)
+	addFlags(cmd)
 
-	args := []string{"-n", "example02", "-p", "github.com/hyperledger/fabric/examples/chaincode/go/chaincode_example02", "-v", "anotherversion", "-c", "{\"Function\":\"init\",\"Args\": [\"param\",\"1\"]}"}
+	args := []string{"-n", "example02", "-p", "github.com/hyperledger/fabric/examples/chaincode/go/chaincode_example02",
+		"-v", "anotherversion", "-c", "{\"Function\":\"init\",\"Args\": [\"param\",\"1\"]}"}
 	cmd.SetArgs(args)
 
 	if err := cmd.Execute(); err != nil {
@@ -98,9 +99,10 @@ func TestUpgradeCmdEndorseFail(t *testing.T) {
 	}
 
 	cmd := upgradeCmd(mockCF)
-	AddFlags(cmd)
+	addFlags(cmd)
 
-	args := []string{"-n", "example02", "-p", "github.com/hyperledger/fabric/examples/chaincode/go/chaincode_example02", "-v", "anotherversion", "-c", "{\"Function\":\"init\",\"Args\": [\"param\",\"1\"]}"}
+	args := []string{"-n", "example02", "-p", "github.com/hyperledger/fabric/examples/chaincode/go/chaincode_example02",
+		"-v", "anotherversion", "-c", "{\"Function\":\"init\",\"Args\": [\"param\",\"1\"]}"}
 	cmd.SetArgs(args)
 
 	expectErrMsg := fmt.Sprintf("Could not assemble transaction, err Proposal response was not successful, error code %d, msg %s", errCode, errMsg)
@@ -138,7 +140,7 @@ func TestUpgradeCmdSendTXFail(t *testing.T) {
 	}
 
 	cmd := upgradeCmd(mockCF)
-	AddFlags(cmd)
+	addFlags(cmd)
 
 	args := []string{"-n", "example02", "-p", "github.com/hyperledger/fabric/examples/chaincode/go/chaincode_example02", "-v", "anotherversion", "-c", "{\"Function\":\"init\",\"Args\": [\"param\",\"1\"]}"}
 	cmd.SetArgs(args)

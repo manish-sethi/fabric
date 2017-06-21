@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"flag"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -41,6 +42,10 @@ func TestMain(m *testing.M) {
 	os.Exit(testResult)
 }
 
+func TestInspectMissing(t *testing.T) {
+	assert.Error(t, doInspectBlock("NonSenseBlockFileThatDoesn'tActuallyExist"), "Missing block")
+}
+
 func TestInspectBlock(t *testing.T) {
 	blockDest := tmpDir + string(os.PathSeparator) + "block"
 
@@ -51,11 +56,35 @@ func TestInspectBlock(t *testing.T) {
 	assert.NoError(t, doInspectBlock(blockDest), "Good block inspection request")
 }
 
+func TestMissingOrdererSection(t *testing.T) {
+	blockDest := tmpDir + string(os.PathSeparator) + "block"
+
+	factory.InitFactories(nil)
+	config := genesisconfig.Load(genesisconfig.SampleInsecureProfile)
+	config.Orderer = nil
+
+	assert.Error(t, doOutputBlock(config, "foo", blockDest), "Missing orderer section")
+}
+
+func TestMissingConsortiumValue(t *testing.T) {
+	configTxDest := tmpDir + string(os.PathSeparator) + "configtx"
+
+	factory.InitFactories(nil)
+	config := genesisconfig.Load(genesisconfig.SampleSingleMSPChannelProfile)
+	config.Consortium = ""
+
+	assert.Error(t, doOutputChannelCreateTx(config, "foo", configTxDest), "Missing Consortium value in Application Profile definition")
+}
+
+func TestInspectMissingConfigTx(t *testing.T) {
+	assert.Error(t, doInspectChannelCreateTx("ChannelCreateTxFileWhichDoesn'tReallyExist"), "Missing channel create tx file")
+}
+
 func TestInspectConfigTx(t *testing.T) {
 	configTxDest := tmpDir + string(os.PathSeparator) + "configtx"
 
 	factory.InitFactories(nil)
-	config := genesisconfig.Load(genesisconfig.SampleInsecureProfile)
+	config := genesisconfig.Load(genesisconfig.SampleSingleMSPChannelProfile)
 
 	assert.NoError(t, doOutputChannelCreateTx(config, "foo", configTxDest), "Good outputChannelCreateTx generation request")
 	assert.NoError(t, doInspectChannelCreateTx(configTxDest), "Good configtx inspection request")
@@ -65,7 +94,50 @@ func TestGenerateAnchorPeersUpdate(t *testing.T) {
 	configTxDest := tmpDir + string(os.PathSeparator) + "anchorPeerUpdate"
 
 	factory.InitFactories(nil)
-	config := genesisconfig.Load(genesisconfig.SampleSingleMSPSoloProfile)
+	config := genesisconfig.Load(genesisconfig.SampleSingleMSPChannelProfile)
 
 	assert.NoError(t, doOutputAnchorPeersUpdate(config, "foo", configTxDest, genesisconfig.SampleOrgName), "Good anchorPeerUpdate request")
+}
+
+func TestConfigTxFlags(t *testing.T) {
+	configTxDest := tmpDir + string(os.PathSeparator) + "configtx"
+	configTxDestAnchorPeers := tmpDir + string(os.PathSeparator) + "configtxAnchorPeers"
+	oldArgs := os.Args
+	defer func() {
+		os.Args = oldArgs
+		flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+	}()
+	os.Args = []string{
+		"cmd",
+		"-outputCreateChannelTx=" + configTxDest,
+		"-profile=" + genesisconfig.SampleSingleMSPChannelProfile,
+		"-inspectChannelCreateTx=" + configTxDest,
+		"-outputAnchorPeersUpdate=" + configTxDestAnchorPeers,
+		"-asOrg=" + genesisconfig.SampleOrgName,
+	}
+	main()
+
+	_, err := os.Stat(configTxDest)
+	assert.NoError(t, err, "Configtx file is written successfully")
+	_, err = os.Stat(configTxDestAnchorPeers)
+	assert.NoError(t, err, "Configtx anchor peers file is written successfully")
+}
+
+func TestBlockFlags(t *testing.T) {
+	blockDest := tmpDir + string(os.PathSeparator) + "block"
+	oldArgs := os.Args
+	defer func() {
+		os.Args = oldArgs
+		flag.CommandLine = flag.NewFlagSet(os.Args[0], flag.ExitOnError)
+	}()
+	os.Args = []string{
+		"cmd",
+		"-profile=" + genesisconfig.SampleSingleMSPSoloProfile,
+		"-outputBlock=" + blockDest,
+		"-inspectBlock=" + blockDest,
+	}
+	main()
+
+	_, err := os.Stat(blockDest)
+	assert.NoError(t, err, "Block file is written successfully")
 }

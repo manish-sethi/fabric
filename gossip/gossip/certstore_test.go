@@ -122,7 +122,7 @@ func TestCertStoreShouldSucceed(t *testing.T) {
 	testCertificateUpdate(t, true, cs)
 }
 
-func TestCertExpiration(t *testing.T) {
+func TestCertRevocation(t *testing.T) {
 	identityExpCheckInterval := identityExpirationCheckInterval
 	defer func() {
 		identityExpirationCheckInterval = identityExpCheckInterval
@@ -151,8 +151,8 @@ func TestCertExpiration(t *testing.T) {
 
 	sentHello := false
 	l := sync.Mutex{}
-	senderMock := mock.Mock{}
-	senderMock.On("Send", mock.Anything, mock.Anything).Run(func(arg mock.Arguments) {
+	sender.Mock = mock.Mock{}
+	sender.On("Send", mock.Anything, mock.Anything).Run(func(arg mock.Arguments) {
 		msg := arg.Get(0).(*proto.SignedGossipMessage)
 		l.Lock()
 		defer l.Unlock()
@@ -169,18 +169,18 @@ func TestCertExpiration(t *testing.T) {
 					},
 				},
 			}
-			go cStore.handleMessage(&sentMsg{msg: dig.NoopSign()})
+			sMsg, _ := dig.NoopSign()
+			go cStore.handleMessage(&sentMsg{msg: sMsg})
 		}
 
 		if dataReq := msg.GetDataReq(); dataReq != nil {
 			askedForIdentity <- struct{}{}
 		}
 	})
-	sender.Mock = senderMock
 	testCertificateUpdate(t, true, cStore)
 	// Shouldn't have asked, because already got identity
 	select {
-	case <-time.After(time.Second * 3):
+	case <-time.After(time.Second * 5):
 	case <-askedForIdentity:
 		assert.Fail(t, "Shouldn't have asked for an identity, becase we already have it")
 	}
@@ -190,33 +190,10 @@ func TestCertExpiration(t *testing.T) {
 	cStore.listRevokedPeers(func(id api.PeerIdentityType) bool {
 		return string(id) == "B"
 	})
+
+	l.Lock()
 	sentHello = false
-	l = sync.Mutex{}
-	senderMock = mock.Mock{}
-	senderMock.On("Send", mock.Anything, mock.Anything).Run(func(arg mock.Arguments) {
-		msg := arg.Get(0).(*proto.SignedGossipMessage)
-		l.Lock()
-		defer l.Unlock()
-
-		if hello := msg.GetHello(); hello != nil && !sentHello {
-			sentHello = true
-			dig := &proto.GossipMessage{
-				Tag: proto.GossipMessage_EMPTY,
-				Content: &proto.GossipMessage_DataDig{
-					DataDig: &proto.DataDigest{
-						Nonce:   hello.Nonce,
-						MsgType: proto.PullMsgType_IDENTITY_MSG,
-						Digests: []string{"B"},
-					},
-				},
-			}
-			go cStore.handleMessage(&sentMsg{msg: dig.NoopSign()})
-		}
-
-		if dataReq := msg.GetDataReq(); dataReq != nil {
-			askedForIdentity <- struct{}{}
-		}
-	})
+	l.Unlock()
 
 	select {
 	case <-time.After(time.Second * 5):
@@ -225,19 +202,81 @@ func TestCertExpiration(t *testing.T) {
 	}
 }
 
+func TestCertExpiration(t *testing.T) {
+	// Scenario: In this test we make sure that a peer may not expire
+	// its own identity.
+	// This is important because the only way identities are gossiped
+	// transitively is via the pull mechanism.
+	// If a peer's own identity disappears from the pull mediator,
+	// it will never be sent to peers transitively.
+	// The test ensures that self identities don't expire
+	// in the following manner:
+	// It starts a peer and then sleeps twice the identity usage threshold,
+	// in order to make sure that its own identity should be expired.
+	// Then, it starts another peer, and listens to the messages sent
+	// between both peers, and looks for a few identity digests of the first peer.
+	// If such identity digest are detected, it means that the peer
+	// didn't expire its own identity.
+
+	// Backup original usageThreshold value
+	idUsageThreshold := identity.GetIdentityUsageThreshold()
+	identity.SetIdentityUsageThreshold(time.Second)
+	// Restore original usageThreshold value
+	defer identity.SetIdentityUsageThreshold(idUsageThreshold)
+
+	// Backup original identityInactivityCheckInterval value
+	inactivityCheckInterval := identityInactivityCheckInterval
+	identityInactivityCheckInterval = time.Second * 1
+	// Restore original identityInactivityCheckInterval value
+	defer func() {
+		identityInactivityCheckInterval = inactivityCheckInterval
+	}()
+
+	g1 := newGossipInstance(4321, 0, 0, 1)
+	defer g1.Stop()
+	time.Sleep(identity.GetIdentityUsageThreshold() * 2)
+	g2 := newGossipInstance(4322, 0, 0)
+	defer g2.Stop()
+
+	identities2Detect := 3
+	// Make the channel bigger than needed so goroutines won't get stuck
+	identitiesGotViaPull := make(chan struct{}, identities2Detect+100)
+	acceptIdentityPullMsgs := func(o interface{}) bool {
+		m := o.(proto.ReceivedMessage).GetGossipMessage()
+		if m.IsPullMsg() && m.IsDigestMsg() {
+			for _, dig := range m.GetDataDig().Digests {
+				if dig == "localhost:4321" {
+					identitiesGotViaPull <- struct{}{}
+				}
+			}
+		}
+		return false
+	}
+	g1.Accept(acceptIdentityPullMsgs, true)
+	for i := 0; i < identities2Detect; i++ {
+		select {
+		case <-identitiesGotViaPull:
+		case <-time.After(time.Second * 15):
+			assert.Fail(t, "Didn't detect an identity gossiped via pull in a timely manner")
+			return
+		}
+	}
+}
+
 func testCertificateUpdate(t *testing.T, shouldSucceed bool, certStore *certStore) {
-	hello := &sentMsg{
-		msg: (&proto.GossipMessage{
-			Channel: []byte(""),
-			Tag:     proto.GossipMessage_EMPTY,
-			Content: &proto.GossipMessage_Hello{
-				Hello: &proto.GossipHello{
-					Nonce:    0,
-					Metadata: nil,
-					MsgType:  proto.PullMsgType_IDENTITY_MSG,
-				},
+	msg, _ := (&proto.GossipMessage{
+		Channel: []byte(""),
+		Tag:     proto.GossipMessage_EMPTY,
+		Content: &proto.GossipMessage_Hello{
+			Hello: &proto.GossipHello{
+				Nonce:    0,
+				Metadata: nil,
+				MsgType:  proto.PullMsgType_IDENTITY_MSG,
 			},
-		}).NoopSign(),
+		},
+	}).NoopSign()
+	hello := &sentMsg{
+		msg: msg,
 	}
 	responseChan := make(chan *proto.GossipMessage, 1)
 	hello.On("Respond", mock.Anything).Run(func(arg mock.Arguments) {
@@ -350,7 +389,8 @@ func createUpdateMessage(nonce uint64, idMsg *proto.SignedGossipMessage) proto.R
 			},
 		},
 	}
-	return &sentMsg{msg: update.NoopSign()}
+	sMsg, _ := update.NoopSign()
+	return &sentMsg{msg: sMsg}
 }
 
 func createDigest(nonce uint64) proto.ReceivedMessage {
@@ -364,7 +404,8 @@ func createDigest(nonce uint64) proto.ReceivedMessage {
 			},
 		},
 	}
-	return &sentMsg{msg: digest.NoopSign()}
+	sMsg, _ := digest.NoopSign()
+	return &sentMsg{msg: sMsg}
 }
 
 func createObjects(updateFactory func(uint64) proto.ReceivedMessage, msgCons proto.MsgConsumer) (pull.Mediator, *certStore, *senderMock) {
@@ -374,7 +415,7 @@ func createObjects(updateFactory func(uint64) proto.ReceivedMessage, msgCons pro
 	config := pull.Config{
 		MsgType:           proto.PullMsgType_IDENTITY_MSG,
 		PeerCountToSelect: 1,
-		PullInterval:      time.Millisecond * 500,
+		PullInterval:      time.Second,
 		Tag:               proto.GossipMessage_EMPTY,
 		Channel:           nil,
 		ID:                "id1",
@@ -396,9 +437,10 @@ func createObjects(updateFactory func(uint64) proto.ReceivedMessage, msgCons pro
 		MemSvc: memberSvc,
 	}
 	pullMediator := pull.NewPullMediator(config, adapter)
+	selfIdentity := api.PeerIdentityType("SELF")
 	certStore = newCertStore(&pullerMock{
 		Mediator: pullMediator,
-	}, identity.NewIdentityMapper(cs), api.PeerIdentityType("SELF"), cs)
+	}, identity.NewIdentityMapper(cs, selfIdentity), selfIdentity, cs)
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)

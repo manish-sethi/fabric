@@ -17,6 +17,8 @@ limitations under the License.
 package chaincode
 
 import (
+	"bytes"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"math/rand"
@@ -25,15 +27,12 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
-	"encoding/json"
-	"strings"
-
 	"github.com/golang/protobuf/proto"
-
 	"github.com/hyperledger/fabric/bccsp/factory"
 	mockpolicies "github.com/hyperledger/fabric/common/mocks/policies"
 	"github.com/hyperledger/fabric/common/policies"
@@ -43,27 +42,34 @@ import (
 	"github.com/hyperledger/fabric/core/container"
 	"github.com/hyperledger/fabric/core/container/ccintf"
 	"github.com/hyperledger/fabric/core/ledger"
+	"github.com/hyperledger/fabric/core/ledger/ledgerconfig"
+	"github.com/hyperledger/fabric/core/ledger/ledgermgmt"
 	"github.com/hyperledger/fabric/core/ledger/util/couchdb"
 	"github.com/hyperledger/fabric/core/peer"
 	"github.com/hyperledger/fabric/core/policy"
+	"github.com/hyperledger/fabric/core/policy/mocks"
 	"github.com/hyperledger/fabric/core/scc"
 	"github.com/hyperledger/fabric/core/testutil"
-	pb "github.com/hyperledger/fabric/protos/peer"
-	putils "github.com/hyperledger/fabric/protos/utils"
-
-	"bytes"
-
-	"github.com/hyperledger/fabric/core/ledger/ledgerconfig"
-	"github.com/hyperledger/fabric/core/ledger/ledgermgmt"
 	"github.com/hyperledger/fabric/msp"
 	mspmgmt "github.com/hyperledger/fabric/msp/mgmt"
 	"github.com/hyperledger/fabric/msp/mgmt/testtools"
 	"github.com/hyperledger/fabric/protos/common"
+	pb "github.com/hyperledger/fabric/protos/peer"
+	putils "github.com/hyperledger/fabric/protos/utils"
 	"github.com/spf13/viper"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
+
+var runTests bool
+
+func testForSkip(t *testing.T) {
+	//run tests
+	if !runTests {
+		t.SkipNow()
+	}
+}
 
 //initialize peer and start up. If security==enabled, login as vp
 func initPeer(chainIDs ...string) (net.Listener, error) {
@@ -534,18 +540,6 @@ func _(chainID string, _ string) error {
 	return nil
 }
 
-// Disable this temporarily.
-// TODO: Need to enable this after update chaincode interface of chaincode repo.
-// Test deploy of a transaction with a chaincode over HTTP.
-//func TestHTTPExecuteDeployTransaction(t *testing.T) {
-//	chainID := util.GetTestChainID()
-
-//	// The chaincode used here cannot be from the fabric repo
-//	// itself or it won't be downloaded because it will be found
-//	// in GOPATH, which would defeat the test
-//	executeDeployTransaction(t, chainID, "example01", "http://gopkg.in/mastersingh24/fabric-test-resources.v1")
-//}
-
 // Check the correctness of the final state after transaction execution.
 func checkFinalState(cccid *ccprovider.CCContext, a int, b int) error {
 	_, txsim, err := startTxSimulation(context.Background(), cccid.ChainID)
@@ -799,6 +793,7 @@ func TestGopathExecuteDeployTransaction(t *testing.T) {
 }
 
 func TestExecuteInvokeTransaction(t *testing.T) {
+	testForSkip(t)
 
 	testCases := []struct {
 		chaincodeType pb.ChaincodeSpec_Type
@@ -850,6 +845,8 @@ func TestExecuteInvokeTransaction(t *testing.T) {
 
 // Test the execution of an invalid transaction.
 func TestExecuteInvokeInvalidTransaction(t *testing.T) {
+	testForSkip(t)
+
 	chainID := util.GetTestChainID()
 
 	lis, err := initPeer(chainID)
@@ -895,6 +892,7 @@ type tcicTc struct {
 
 // Test the execution of a chaincode that invokes another chaincode.
 func TestChaincodeInvokeChaincode(t *testing.T) {
+	testForSkip(t)
 	channel := util.GetTestChainID()
 	channel2 := channel + "2"
 	lis, err := initPeer(channel, channel2)
@@ -968,6 +966,7 @@ func stopChaincode(ctx context.Context, chaincodeCtx *ccprovider.CCContext) {
 // Test the execution of a chaincode that invokes another chaincode with wrong parameters. Should receive error from
 // from the called chaincode
 func TestChaincodeInvokeChaincodeErrorCase(t *testing.T) {
+	testForSkip(t)
 	chainID := util.GetTestChainID()
 
 	lis, err := initPeer(chainID)
@@ -1060,6 +1059,7 @@ func TestChaincodeInvokeChaincodeErrorCase(t *testing.T) {
 
 // Test the invocation of a transaction.
 func TestQueries(t *testing.T) {
+	testForSkip(t)
 
 	chainID := util.GetTestChainID()
 
@@ -1397,7 +1397,7 @@ func TestQueries(t *testing.T) {
 }
 
 func TestGetEvent(t *testing.T) {
-
+	testForSkip(t)
 	testCases := []struct {
 		chaincodeType pb.ChaincodeSpec_Type
 		chaincodePath string
@@ -1482,6 +1482,7 @@ func TestGetEvent(t *testing.T) {
 // Test the execution of a chaincode that queries another chaincode
 // example02 implements "query" as a function in Invoke. example05 calls example02
 func TestChaincodeQueryChaincodeUsingInvoke(t *testing.T) {
+	testForSkip(t)
 	//this is essentially same as the ChaincodeInvokeChaincode now that
 	//we don't distinguish between Invoke and Query (there's no separate "Query")
 	t.Skip()
@@ -1606,6 +1607,7 @@ func TestChaincodeQueryChaincodeUsingInvoke(t *testing.T) {
 
 // test that invoking a security-sensitive system chaincode fails
 func TestChaincodeInvokesForbiddenSystemChaincode(t *testing.T) {
+	testForSkip(t)
 	chainID := util.GetTestChainID()
 
 	lis, err := initPeer(chainID)
@@ -1661,6 +1663,7 @@ func TestChaincodeInvokesForbiddenSystemChaincode(t *testing.T) {
 // Test the execution of a chaincode that invokes system chaincode
 // uses the "pthru" chaincode to query "lscc" for the "pthru" chaincode
 func TestChaincodeInvokesSystemChaincode(t *testing.T) {
+	testForSkip(t)
 	chainID := util.GetTestChainID()
 
 	lis, err := initPeer(chainID)
@@ -1724,6 +1727,7 @@ func TestChaincodeInvokesSystemChaincode(t *testing.T) {
 }
 
 func TestChaincodeInitializeInitError(t *testing.T) {
+	testForSkip(t)
 	testCases := []struct {
 		name          string
 		chaincodeType pb.ChaincodeSpec_Type
@@ -1877,7 +1881,7 @@ type mockPolicyCheckerFactory struct{}
 func (f *mockPolicyCheckerFactory) NewPolicyChecker() policy.PolicyChecker {
 	return policy.NewPolicyChecker(
 		peer.NewChannelPolicyManagerGetter(),
-		&policy.MockIdentityDeserializer{[]byte("Admin"), []byte("msg1")},
-		&policy.MockMSPPrincipalGetter{Principal: []byte("Admin")},
+		&mocks.MockIdentityDeserializer{[]byte("Admin"), []byte("msg1")},
+		&mocks.MockMSPPrincipalGetter{Principal: []byte("Admin")},
 	)
 }

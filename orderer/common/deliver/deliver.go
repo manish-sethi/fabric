@@ -17,6 +17,8 @@ limitations under the License.
 package deliver
 
 import (
+	"io"
+
 	"github.com/hyperledger/fabric/common/policies"
 	"github.com/hyperledger/fabric/orderer/common/filter"
 	"github.com/hyperledger/fabric/orderer/common/sigfilter"
@@ -43,11 +45,17 @@ type SupportManager interface {
 
 // Support provides the backing resources needed to support deliver on a chain
 type Support interface {
+	// Sequence returns the current config sequence number, can be used to detect config changes
+	Sequence() uint64
+
 	// PolicyManager returns the current policy manager as specified by the chain configuration
 	PolicyManager() policies.Manager
 
 	// Reader returns the chain Reader for the chain
 	Reader() ledger.Reader
+
+	// Errored returns a channel which closes when the backing consenter has errored
+	Errored() <-chan struct{}
 }
 
 type deliverServer struct {
@@ -66,70 +74,71 @@ func (ds *deliverServer) Handle(srv ab.AtomicBroadcast_DeliverServer) error {
 	for {
 		logger.Debugf("Attempting to read seek info message")
 		envelope, err := srv.Recv()
+		if err == io.EOF {
+			logger.Debugf("Received EOF, hangup")
+			return nil
+		}
+
 		if err != nil {
-			if logger.IsEnabledFor(logging.WARNING) {
-				logger.Warningf("Error reading from stream: %s", err)
-			}
+			logger.Warningf("Error reading from stream: %s", err)
 			return err
 		}
-		payload := &cb.Payload{}
-		if err = proto.Unmarshal(envelope.Payload, payload); err != nil {
-			if logger.IsEnabledFor(logging.WARNING) {
-				logger.Warningf("Received an envelope with no payload: %s", err)
-			}
+
+		payload, err := utils.UnmarshalPayload(envelope.Payload)
+		if err != nil {
+			logger.Warningf("Received an envelope with no payload: %s", err)
 			return sendStatusReply(srv, cb.Status_BAD_REQUEST)
 		}
 
 		if payload.Header == nil {
-			if logger.IsEnabledFor(logging.WARNING) {
-				logger.Warningf("Malformed envelope received with bad header")
-			}
+			logger.Warningf("Malformed envelope received with bad header")
 			return sendStatusReply(srv, cb.Status_BAD_REQUEST)
 		}
 
 		chdr, err := utils.UnmarshalChannelHeader(payload.Header.ChannelHeader)
 		if err != nil {
-			logger.Error(err)
-			return err
+			logger.Warningf("Failed to unmarshal channel header: %s", err)
+			return sendStatusReply(srv, cb.Status_BAD_REQUEST)
 		}
 
 		chain, ok := ds.sm.GetChain(chdr.ChannelId)
 		if !ok {
 			// Note, we log this at DEBUG because SDKs will poll waiting for channels to be created
 			// So we would expect our log to be somewhat flooded with these
-			if logger.IsEnabledFor(logging.DEBUG) {
-				logger.Debugf("Client request for channel %s not found", chdr.ChannelId)
-			}
+			logger.Debugf("Rejecting deliver because channel %s not found", chdr.ChannelId)
 			return sendStatusReply(srv, cb.Status_NOT_FOUND)
 		}
+
+		erroredChan := chain.Errored()
+		select {
+		case <-erroredChan:
+			logger.Warningf("[channel: %s] Rejecting deliver request because of consenter error", chdr.ChannelId)
+			return sendStatusReply(srv, cb.Status_SERVICE_UNAVAILABLE)
+		default:
+
+		}
+
+		lastConfigSequence := chain.Sequence()
 
 		sf := sigfilter.New(policies.ChannelReaders, chain.PolicyManager())
 		result, _ := sf.Apply(envelope)
 		if result != filter.Forward {
-			if logger.IsEnabledFor(logging.WARNING) {
-				logger.Warningf("Received unauthorized deliver request for channel %s", chdr.ChannelId)
-			}
+			logger.Warningf("[channel: %s] Received unauthorized deliver request", chdr.ChannelId)
 			return sendStatusReply(srv, cb.Status_FORBIDDEN)
 		}
 
 		seekInfo := &ab.SeekInfo{}
 		if err = proto.Unmarshal(payload.Data, seekInfo); err != nil {
-			if logger.IsEnabledFor(logging.WARNING) {
-				logger.Warningf("Received a signed deliver request with malformed seekInfo payload: %s", err)
-			}
+			logger.Warningf("[channel: %s] Received a signed deliver request with malformed seekInfo payload: %s", chdr.ChannelId, err)
 			return sendStatusReply(srv, cb.Status_BAD_REQUEST)
 		}
 
 		if seekInfo.Start == nil || seekInfo.Stop == nil {
-			if logger.IsEnabledFor(logging.WARNING) {
-				logger.Warningf("Received seekInfo message with missing start or stop %v, %v", seekInfo.Start, seekInfo.Stop)
-			}
+			logger.Warningf("[channel: %s] Received seekInfo message with missing start or stop %v, %v", chdr.ChannelId, seekInfo.Start, seekInfo.Stop)
 			return sendStatusReply(srv, cb.Status_BAD_REQUEST)
 		}
 
-		if logger.IsEnabledFor(logging.DEBUG) {
-			logger.Debugf("Received seekInfo (%p) %v for chain %s", seekInfo, seekInfo, chdr.ChannelId)
-		}
+		logger.Debugf("[channel: %s] Received seekInfo (%p) %v", chdr.ChannelId, seekInfo, seekInfo)
 
 		cursor, number := chain.Reader().Iterator(seekInfo.Start)
 		var stopNum uint64
@@ -140,11 +149,20 @@ func (ds *deliverServer) Handle(srv ab.AtomicBroadcast_DeliverServer) error {
 			stopNum = chain.Reader().Height() - 1
 		case *ab.SeekPosition_Specified:
 			stopNum = stop.Specified.Number
+			if stopNum < number {
+				logger.Warningf("[channel: %s] Received invalid seekInfo message: start number %d greater than stop number %d", chdr.ChannelId, number, stopNum)
+				return sendStatusReply(srv, cb.Status_BAD_REQUEST)
+			}
 		}
 
 		for {
 			if seekInfo.Behavior == ab.SeekInfo_BLOCK_UNTIL_READY {
-				<-cursor.ReadyChan()
+				select {
+				case <-erroredChan:
+					logger.Warningf("[channel: %s] Aborting deliver request because of consenter error", chdr.ChannelId)
+					return sendStatusReply(srv, cb.Status_SERVICE_UNAVAILABLE)
+				case <-cursor.ReadyChan():
+				}
 			} else {
 				select {
 				case <-cursor.ReadyChan():
@@ -153,16 +171,27 @@ func (ds *deliverServer) Handle(srv ab.AtomicBroadcast_DeliverServer) error {
 				}
 			}
 
+			currentConfigSequence := chain.Sequence()
+			if currentConfigSequence > lastConfigSequence {
+				lastConfigSequence = currentConfigSequence
+				sf := sigfilter.New(policies.ChannelReaders, chain.PolicyManager())
+				result, _ := sf.Apply(envelope)
+				if result != filter.Forward {
+					logger.Warningf("[channel: %s] Client authorization revoked for deliver request", chdr.ChannelId)
+					return sendStatusReply(srv, cb.Status_FORBIDDEN)
+				}
+			}
+
 			block, status := cursor.Next()
 			if status != cb.Status_SUCCESS {
-				logger.Errorf("Error reading from channel, cause was: %v", status)
+				logger.Errorf("[channel: %s] Error reading from channel, cause was: %v", chdr.ChannelId, status)
 				return sendStatusReply(srv, status)
 			}
 
-			if logger.IsEnabledFor(logging.DEBUG) {
-				logger.Debugf("Delivering block for (%p) channel: %s", seekInfo, chdr.ChannelId)
-			}
+			logger.Debugf("[channel: %s] Delivering block for (%p)", chdr.ChannelId, seekInfo)
+
 			if err := sendBlockReply(srv, block); err != nil {
+				logger.Warningf("[channel: %s] Error sending to stream: %s", chdr.ChannelId, err)
 				return err
 			}
 
@@ -172,11 +201,11 @@ func (ds *deliverServer) Handle(srv ab.AtomicBroadcast_DeliverServer) error {
 		}
 
 		if err := sendStatusReply(srv, cb.Status_SUCCESS); err != nil {
+			logger.Warningf("[channel: %s] Error sending to stream: %s", chdr.ChannelId, err)
 			return err
 		}
-		if logger.IsEnabledFor(logging.DEBUG) {
-			logger.Debugf("Done delivering for (%p), waiting for new SeekInfo", seekInfo)
-		}
+
+		logger.Debugf("[channel: %s] Done delivering for (%p), waiting for new SeekInfo", chdr.ChannelId, seekInfo)
 	}
 }
 

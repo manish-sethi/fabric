@@ -62,7 +62,7 @@ var mainCmd = &cobra.Command{
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 		if versionFlag {
-			version.Print()
+			fmt.Print(version.GetInfo())
 		} else {
 			cmd.HelpFunc()(cmd, args)
 		}
@@ -110,7 +110,8 @@ func main() {
 	var mspID = viper.GetString("peer.localMspId")
 	err = common.InitCrypto(mspMgrConfigDir, mspID)
 	if err != nil { // Handle errors reading the config file
-		panic(err.Error())
+		logger.Errorf("Cannot run peer because %s", err.Error())
+		os.Exit(1)
 	}
 	// On failure Cobra prints the usage message and error string, so we only
 	// need to exit with a non-0 status

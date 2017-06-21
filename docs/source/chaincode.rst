@@ -1,11 +1,6 @@
 What is chaincode?
 ==================
 
-[WIP]
-
-coming soon ... end-to-end examples of chaincode demonstrating the
-available APIs.
-
 Chaincode is a piece of code that is written in one of the supported
 languages such as Go or Java. It is installed and instantiated through
 an SDK or CLI onto a network of Hyperledger Fabric peer nodes, enabling
@@ -69,7 +64,7 @@ with the following command:
 
 However, it also includes functions from chaincode.pb.go (protobuffer
 functions) that are not intended as public APIs. The best practice is to
-look at the function definitions in chaincode.go and and the
+look at the function definitions and comments in interfaces.go and the
 `examples <https://github.com/hyperledger/fabric/tree/master/examples/chaincode/go>`__
 directory.
 
@@ -215,7 +210,7 @@ Command
 
    <th width="371" bgcolor="#ffffff" style="border-top: none; border-bottom: 1.50pt solid #e1e4e5; border-left: none; border-right: none; padding-top: 0in; padding-bottom: 0.08in; padding-left: 0in; padding-right: 0in">
 
-stdout result in the event of success
+stdout result in the event of success
 
 .. raw:: html
 
@@ -251,7 +246,7 @@ version
 
    <td width="371" bgcolor="#f3f6f6" style="border-top: 1px solid #e1e4e5; border-bottom: 1px solid #e1e4e5; border-left: 1px solid #e1e4e5; border-right: none; padding-top: 0in; padding-bottom: 0.08in; padding-left: 0.16in; padding-right: 0in">
 
-String form of peer.version defined in core.yaml
+String form of peer.version defined in core.yaml
 
 .. raw:: html
 
@@ -307,7 +302,7 @@ node status
 
    <td width="371" bgcolor="#f3f6f6" style="border-top: 1px solid #e1e4e5; border-bottom: 1px solid #e1e4e5; border-left: 1px solid #e1e4e5; border-right: none; padding-top: 0in; padding-bottom: 0.08in; padding-left: 0.16in; padding-right: 0in">
 
-String form of StatusCode
+String form of StatusCode
 
 .. raw:: html
 
@@ -335,7 +330,7 @@ node stop
 
    <td width="371" bgcolor="#ffffff" style="border-top: 1px solid #e1e4e5; border-bottom: 1px solid #e1e4e5; border-left: 1px solid #e1e4e5; border-right: none; padding-top: 0in; padding-bottom: 0.08in; padding-left: 0.16in; padding-right: 0in">
 
-String form of StatusCode
+String form of StatusCode
 
 .. raw:: html
 
@@ -364,7 +359,7 @@ chaincode deploy
    <td width="371" bgcolor="#f3f6f6" style="border-top: 1px solid #e1e4e5; border-bottom: 1px solid #e1e4e5; border-left: 1px solid #e1e4e5; border-right: none; padding-top: 0in; padding-bottom: 0.08in; padding-left: 0.16in; padding-right: 0in">
 
 The chaincode container name (hash) required for subsequent chaincode
-invoke and chaincode query commands
+invoke and chaincode query commands
 
 .. raw:: html
 
@@ -492,31 +487,6 @@ Adds a peer to the chain
 
 .. raw:: html
 
-   <td width="262" bgcolor="#f3f6f6" style="border-top: 1px solid #e1e4e5; border-bottom: 1px solid #e1e4e5; border-left: 1px solid #e1e4e5; border-right: none; padding-top: 0in; padding-bottom: 0.08in; padding-left: 0.16in; padding-right: 0in">
-
-.. raw:: html
-
-   <pre class="western" style="orphans: 2; widows: 2"><span style="display: inline-block; border: 1px solid #e1e4e5; padding: 0.01in"><span style="font-variant: normal"><font color="#e74c3c"><font face="Consolas, Andale Mono WT, Andale Mono, Lucida Console, Lucida Sans Typewriter, DejaVu Sans Mono, Bitstream Vera Sans Mono, Liberation Mono, Nimbus Mono L, Monaco, Courier New, Courier, monospace"><font size="1" style="font-size: 7pt"><span style="letter-spacing: normal"><span lang="en-US"><span style="font-style: normal"><span style="font-weight: normal">--peer-defaultchain=true</span></span></span></span></font></font></font></span></span></pre>
-
-.. raw:: html
-
-   </td>
-
-.. raw:: html
-
-   <td width="371" bgcolor="#f3f6f6" style="border-top: 1px solid #e1e4e5; border-bottom: 1px solid #e1e4e5; border-left: 1px solid #e1e4e5; border-right: none; padding-top: 0in; padding-bottom: 0.08in; padding-left: 0.16in; padding-right: 0in">
-
- Allows users to continue to work with the default TEST\_CHAINID string.
-Command line options support writing this value as raw bytes (-r, –raw)
-or formatted as the hexadecimal representation of the raw bytes (-x,
-–hex). If the query response is empty then nothing is output.
-
-.. raw:: html
-
-   </td>
-
-.. raw:: html
-
    </tbody>
 
 .. raw:: html
@@ -535,3 +505,6 @@ Deploy a chaincode
 
 [WIP] - the CLI commands need to be refactored based on the new
 deployment model. Channel Create and Channel Join will remain the same.
+
+.. Licensed under Creative Commons Attribution 4.0 International License
+   https://creativecommons.org/licenses/by/4.0/
