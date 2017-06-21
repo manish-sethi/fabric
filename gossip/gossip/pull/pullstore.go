@@ -154,7 +154,6 @@ func (p *pullMediatorImpl) HandleMessage(m proto.ReceivedMessage) {
 		return
 	}
 	msg := m.GetGossipMessage()
-
 	msgType := msg.GetPullMsgType()
 	if msgType != p.config.MsgType {
 		return
@@ -262,8 +261,13 @@ func (p *pullMediatorImpl) Hello(dest string, nonce uint64) {
 		},
 	}
 
-	p.logger.Debug("Sending hello to", dest)
-	p.Sndr.Send(helloMsg.NoopSign(), p.peersWithEndpoints(dest)...)
+	p.logger.Debug("Sending", p.config.MsgType, "hello to", dest)
+	sMsg, err := helloMsg.NoopSign()
+	if err != nil {
+		p.logger.Error("Failed creating SignedGossipMessage:", err)
+		return
+	}
+	p.Sndr.Send(sMsg, p.peersWithEndpoints(dest)...)
 }
 
 // SendDigest sends a digest to a remote PullEngine.
@@ -281,7 +285,8 @@ func (p *pullMediatorImpl) SendDigest(digest []string, nonce uint64, context int
 			},
 		},
 	}
-	p.logger.Debug("Sending digest", digMsg.GetDataDig().Digests)
+	remotePeer := context.(proto.ReceivedMessage).GetConnectionInfo()
+	p.logger.Debug("Sending", p.config.MsgType, "digest:", digMsg.GetDataDig().Digests, "to", remotePeer)
 	context.(proto.ReceivedMessage).Respond(digMsg)
 }
 
@@ -301,7 +306,12 @@ func (p *pullMediatorImpl) SendReq(dest string, items []string, nonce uint64) {
 		},
 	}
 	p.logger.Debug("Sending", req, "to", dest)
-	p.Sndr.Send(req.NoopSign(), p.peersWithEndpoints(dest)...)
+	sMsg, err := req.NoopSign()
+	if err != nil {
+		p.logger.Warning("Failed creating SignedGossipMessage:", err)
+		return
+	}
+	p.Sndr.Send(sMsg, p.peersWithEndpoints(dest)...)
 }
 
 // SendRes sends an array of items to a remote PullEngine identified by a context.
@@ -314,7 +324,6 @@ func (p *pullMediatorImpl) SendRes(items []string, context interface{}, nonce ui
 			items2return = append(items2return, msg.Envelope)
 		}
 	}
-
 	returnedUpdate := &proto.GossipMessage{
 		Channel: p.config.Channel,
 		Tag:     p.config.Tag,
@@ -327,7 +336,8 @@ func (p *pullMediatorImpl) SendRes(items []string, context interface{}, nonce ui
 			},
 		},
 	}
-	p.logger.Debug("Sending", returnedUpdate, "to")
+	remotePeer := context.(proto.ReceivedMessage).GetConnectionInfo()
+	p.logger.Debug("Sending", len(returnedUpdate.GetDataUpdate().Data), p.config.MsgType, "items to", remotePeer)
 	context.(proto.ReceivedMessage).Respond(returnedUpdate)
 }
 

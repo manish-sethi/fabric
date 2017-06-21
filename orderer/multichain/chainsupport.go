@@ -34,7 +34,7 @@ import (
 
 // Consenter defines the backing ordering mechanism
 type Consenter interface {
-	// HandleChain should create a return a reference to a Chain for the given set of resources
+	// HandleChain should create and return a reference to a Chain for the given set of resources
 	// It will only be invoked for a given chain once per process.  In general, errors will be treated
 	// as irrecoverable and cause system shutdown.  See the description of Chain for more details
 	// The second argument to HandleChain is a pointer to the metadata stored on the `ORDERER` slot of
@@ -50,8 +50,13 @@ type Consenter interface {
 // 1. Messages are ordered into a stream, the stream is cut into blocks, the blocks are committed (solo, kafka)
 // 2. Messages are cut into blocks, the blocks are ordered, then the blocks are committed (sbft)
 type Chain interface {
-	// Enqueue accepts a message and returns true on acceptance, or false on shutdown
+	// Enqueue accepts a message and returns true on acceptance, or false on failure
 	Enqueue(env *cb.Envelope) bool
+
+	// Errored returns a channel which will close when an error has occurred
+	// This is especially useful for the Deliver client, who must terminate waiting
+	// clients when the consenter is not up to date
+	Errored() <-chan struct{}
 
 	// Start should allocate whatever resources are needed for staying up to date with the chain
 	// Typically, this involves creating a thread which reads from the ordering source, passes those
@@ -84,8 +89,14 @@ type ChainSupport interface {
 	// Reader returns the chain Reader for the chain
 	Reader() ledger.Reader
 
+	// Errored returns whether the backing consenter has errored
+	Errored() <-chan struct{}
+
 	broadcast.Support
 	ConsenterSupport
+
+	// Sequence returns the current config sequence number
+	Sequence() uint64
 
 	// ProposeConfigUpdate applies a CONFIG_UPDATE to an existing config to produce a *cb.ConfigEnvelope
 	ProposeConfigUpdate(env *cb.Envelope) (*cb.ConfigEnvelope, error)
@@ -122,16 +133,28 @@ func newChainSupport(
 		signer:          signer,
 	}
 
+	cs.lastConfigSeq = cs.Sequence()
+
 	var err error
 
 	lastBlock := ledger.GetBlock(cs.Reader(), cs.Reader().Height()-1)
+
+	// If this is the genesis block, the lastconfig field may be empty, and, the last config is necessary 0
+	// so no need to initialize lastConfig
+	if lastBlock.Header.Number != 0 {
+		cs.lastConfig, err = utils.GetLastConfigIndexFromBlock(lastBlock)
+		if err != nil {
+			logger.Fatalf("[channel: %s] Error extracting last config block from block metadata: %s", cs.ChainID(), err)
+		}
+	}
+
 	metadata, err := utils.GetMetadataFromBlock(lastBlock, cb.BlockMetadataIndex_ORDERER)
 	// Assuming a block created with cb.NewBlock(), this should not
 	// error even if the orderer metadata is an empty byte slice
 	if err != nil {
 		logger.Fatalf("[channel: %s] Error extracting orderer metadata: %s", cs.ChainID(), err)
 	}
-	logger.Debugf("[channel: %s] Retrieved metadata for tip of chain (block #%d): %+v", cs.ChainID(), cs.Reader().Height()-1, metadata)
+	logger.Debugf("[channel: %s] Retrieved metadata for tip of chain (blockNumber=%d, lastConfig=%d, lastConfigSeq=%d): %+v", cs.ChainID(), lastBlock.Header.Number, cs.lastConfig, cs.lastConfigSeq, metadata)
 
 	cs.chain, err = consenter.HandleChain(cs, metadata)
 	if err != nil {
@@ -193,6 +216,10 @@ func (cs *chainSupport) Enqueue(env *cb.Envelope) bool {
 	return cs.chain.Enqueue(env)
 }
 
+func (cs *chainSupport) Errored() <-chan struct{} {
+	return cs.chain.Errored()
+}
+
 func (cs *chainSupport) CreateNextBlock(messages []*cb.Envelope) *cb.Block {
 	return ledger.CreateNextBlock(cs.ledger, messages)
 }
@@ -222,6 +249,7 @@ func (cs *chainSupport) addBlockSignature(block *cb.Block) {
 func (cs *chainSupport) addLastConfigSignature(block *cb.Block) {
 	configSeq := cs.Sequence()
 	if configSeq > cs.lastConfigSeq {
+		logger.Debugf("[channel: %s] Detected lastConfigSeq transitioning from %d to %d, setting lastConfig from %d to %d", cs.ChainID(), cs.lastConfigSeq, configSeq, cs.lastConfig, block.Header.Number)
 		cs.lastConfig = block.Header.Number
 		cs.lastConfigSeq = configSeq
 	}

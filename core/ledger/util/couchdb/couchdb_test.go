@@ -256,7 +256,7 @@ func TestDBBadDatabaseName(t *testing.T) {
 			couchDBDef.MaxRetries, couchDBDef.MaxRetriesOnStartup, couchDBDef.RequestTimeout)
 		testutil.AssertNoError(t, err, fmt.Sprintf("Error when trying to create couch instance"))
 		_, dberr := CreateCouchDatabase(*couchInstance, "testDB")
-		testutil.AssertNoError(t, dberr, fmt.Sprintf("Error when testing a valid database name"))
+		testutil.AssertError(t, dberr, "Error should have been thrown for an invalid db name")
 
 		//create a new instance and database object using a valid database name letters and numbers
 		couchInstance, err = CreateCouchInstance(couchDBDef.URL, couchDBDef.Username, couchDBDef.Password,
@@ -270,20 +270,19 @@ func TestDBBadDatabaseName(t *testing.T) {
 			couchDBDef.MaxRetries, couchDBDef.MaxRetriesOnStartup, couchDBDef.RequestTimeout)
 		testutil.AssertNoError(t, err, fmt.Sprintf("Error when trying to create couch instance"))
 		_, dberr = CreateCouchDatabase(*couchInstance, "test1234~!@#$%^&*()[]{}.")
-		testutil.AssertNoError(t, dberr, fmt.Sprintf("Error when testing a valid database name"))
+		testutil.AssertError(t, dberr, "Error should have been thrown for an invalid db name")
 
 		//create a new instance and database object using a invalid database name - too long	/*
 		couchInstance, err = CreateCouchInstance(couchDBDef.URL, couchDBDef.Username, couchDBDef.Password,
 			couchDBDef.MaxRetries, couchDBDef.MaxRetriesOnStartup, couchDBDef.RequestTimeout)
 		testutil.AssertNoError(t, err, fmt.Sprintf("Error when trying to create couch instance"))
-		_, dberr = CreateCouchDatabase(*couchInstance, "A12345678901234567890123456789012345678901234"+
+		_, dberr = CreateCouchDatabase(*couchInstance, "a12345678901234567890123456789012345678901234"+
 			"56789012345678901234567890123456789012345678901234567890123456789012345678901234567890"+
 			"12345678901234567890123456789012345678901234567890123456789012345678901234567890123456"+
 			"78901234567890123456789012345678901234567890")
 		testutil.AssertError(t, dberr, fmt.Sprintf("Error should have been thrown for invalid database name"))
 
 	}
-
 }
 
 func TestDBBadConnection(t *testing.T) {
@@ -543,6 +542,76 @@ func TestDBRequestTimeout(t *testing.T) {
 			testutil.AssertEquals(t, strings.Count(err.Error(), "Client.Timeout exceeded while awaiting headers"), 1)
 
 		}
+	}
+}
+
+func TestDBTimeoutConflictRetry(t *testing.T) {
+
+	if ledgerconfig.IsCouchDBEnabled() {
+
+		database := "testdbtimeoutretry"
+		err := cleanup(database)
+		testutil.AssertNoError(t, err, fmt.Sprintf("Error when trying to cleanup  Error: %s", err))
+		defer cleanup(database)
+
+		// if there was an error upon cleanup, return here
+		if err != nil {
+			return
+		}
+
+		//create a new instance and database object
+		couchInstance, err := CreateCouchInstance(couchDBDef.URL, couchDBDef.Username, couchDBDef.Password,
+			couchDBDef.MaxRetries, 3, couchDBDef.RequestTimeout)
+		testutil.AssertNoError(t, err, fmt.Sprintf("Error when trying to create couch instance"))
+		db := CouchDatabase{CouchInstance: *couchInstance, DBName: database}
+
+		//create a new database
+		_, errdb := db.CreateDatabaseIfNotExist()
+		testutil.AssertNoError(t, errdb, fmt.Sprintf("Error when trying to create database"))
+
+		//Retrieve the info for the new database and make sure the name matches
+		dbResp, _, errdb := db.GetDatabaseInfo()
+		testutil.AssertNoError(t, errdb, fmt.Sprintf("Error when trying to retrieve database information"))
+		testutil.AssertEquals(t, dbResp.DbName, database)
+
+		//Save the test document
+		_, saveerr := db.SaveDoc("1", "", &CouchDoc{JSONValue: assetJSON, Attachments: nil})
+		testutil.AssertNoError(t, saveerr, fmt.Sprintf("Error when trying to save a document"))
+
+		//Retrieve the test document
+		_, _, geterr := db.ReadDoc("1")
+		testutil.AssertNoError(t, geterr, fmt.Sprintf("Error when trying to retrieve a document"))
+
+		//Save the test document with an invalid rev.  This should cause a retry
+		_, saveerr = db.SaveDoc("1", "1-11111111111111111111111111111111", &CouchDoc{JSONValue: assetJSON, Attachments: nil})
+		testutil.AssertNoError(t, saveerr, fmt.Sprintf("Error when trying to save a document with a revision conflict"))
+
+		//Delete the test document with an invalid rev.  This should cause a retry
+		deleteerr := db.DeleteDoc("1", "1-11111111111111111111111111111111")
+		testutil.AssertNoError(t, deleteerr, fmt.Sprintf("Error when trying to delete a document with a revision conflict"))
+
+	}
+}
+
+func TestDBBadNumberOfRetries(t *testing.T) {
+
+	if ledgerconfig.IsCouchDBEnabled() {
+
+		database := "testdbbadretries"
+		err := cleanup(database)
+		testutil.AssertNoError(t, err, fmt.Sprintf("Error when trying to cleanup  Error: %s", err))
+		defer cleanup(database)
+
+		// if there was an error upon cleanup, return here
+		if err != nil {
+			return
+		}
+
+		//create a new instance and database object
+		_, err = CreateCouchInstance(couchDBDef.URL, couchDBDef.Username, couchDBDef.Password,
+			0, 3, couchDBDef.RequestTimeout)
+		testutil.AssertError(t, err, fmt.Sprintf("Error should have been thrown while attempting to create a database"))
+
 	}
 }
 

@@ -107,7 +107,8 @@ def step_impl(context, chainId):
 def step_impl(context, ordererSystemChainId):
     directory = bootstrap_util.getDirectory(context)
     ordererBootstrapAdmin = bootstrap_util.getOrdererBootstrapAdmin(context)
-    ordererBootstrapAdmin.setTagValue(ordererSystemChainId, bootstrap_util.GetUUID())
+    chaind_id = bootstrap_util.GetUniqueChannelName()
+    ordererBootstrapAdmin.setTagValue(ordererSystemChainId, chaind_id)
 
 
 @given(u'the orderer config admin "{ordererConfigAdmin}" creates a consortium "{consortiumName}" with modification policy "{modPolicy}" for peer orgs who wish to form a network')
@@ -139,12 +140,12 @@ def step_impl(context, ordererConfigAdmin, consortiumsConfigUpdateName, configNa
     config_update = bootstrap_util.create_orderer_consortium_config_update(orderer_system_chain_id, channel_group, config_groups)
     ordererConfigAdmin.setTagValue(tagKey=consortiumsConfigUpdateName, tagValue=config_update)
 
-@given(u'the user "{userName}" creates a peer template "{templateName}" with chaincode deployment policy using consortium "{chainCreatePolicyName}" and peer organizations')
-def step_impl(context, userName, templateName, chainCreatePolicyName):
+@given(u'the user "{userName}" creates a peer organization set "{peerOrgSetName}" with peer organizations')
+def step_impl(context, userName, peerOrgSetName):
     ' At the moment, only really defining MSP Config Items (NOT SIGNED)'
     directory = bootstrap_util.getDirectory(context)
     user = directory.getUser(userName)
-    user.setTagValue(templateName, [directory.getOrganization(row['Organization']) for row in context.table.rows])
+    user.setTagValue(peerOrgSetName, [directory.getOrganization(row['Organization']).name for row in context.table.rows])
 
 @given(u'the user "{userName}" creates a configUpdateEnvelope "{configUpdateEnvelopeName}" using configUpdate "{configUpdateName}"')
 def step_impl(context, userName, configUpdateEnvelopeName, configUpdateName):
@@ -153,27 +154,65 @@ def step_impl(context, userName, configUpdateEnvelopeName, configUpdateName):
     config_update_envelope = bootstrap_util.create_config_update_envelope(config_update=user.getTagValue(configUpdateName))
     user.setTagValue(tagKey=configUpdateEnvelopeName, tagValue=config_update_envelope)
 
-@given(u'the user "{userName}" creates a new channel ConfigUpdate "{create_channel_config_update_name}" using consortium config "{consortium_name}"')
+@given(u'the user "{userName}" creates a new channel ConfigUpdate "{create_channel_config_update_name}" using consortium "{consortium_name}"')
 def step_impl(context, userName, create_channel_config_update_name, consortium_name):
     directory = bootstrap_util.getDirectory(context)
     user = directory.getUser(userName)
     consortium_config_group = user.getTagValue(tagKey=consortium_name)
 
+    peer_org_set = user.getTagValue(tagKey=context.table.rows[0]["PeerOrgSet"])
+    peer_anchor_set_tag_key = context.table.rows[0]["[PeerAnchorSet]"]
+    peer_anchor_config_group = None
+    if peer_anchor_set_tag_key != "":
+        peer_anchor_config_group = user.getTagValue(tagKey=peer_anchor_set_tag_key)
+
     channel_id = context.table.rows[0]["ChannelID"]
-    templateName = context.table.rows[0]["Template"]
     # Loop through templates referenced orgs
     # mspOrgNames = [org.name for org in user.tags[templateName]]
     #TODO: Where does the system_channel_version come from?
     system_channel_version = 0
     channel_config_update = bootstrap_util.create_channel_config_update(system_channel_version, channel_id, consortium_config_group)
 
-    # Add the anchors signed config Items
-    # anchorSignedConfigItemsName = context.table.rows[0]["Anchors"]
-    # signedAnchorsConfigItems = user.tags[anchorSignedConfigItemsName]
+    # Add the anchors config group
+    if peer_anchor_config_group:
+        bootstrap_util.mergeConfigGroups(channel_config_update.write_set, peer_anchor_config_group)
+
+    #Make sure orgs exist in consortium
+    for orgName in peer_org_set:
+        assert orgName in channel_config_update.write_set.groups['Application'].groups.keys(), "PeerOrgSet entry {0} not found in consortium".format(orgName)
+
+    # Strip out any organizations that are NOT referenced in peerOrgSet
+    for orgName in channel_config_update.write_set.groups['Application'].groups.keys():
+        if not orgName in peer_org_set:
+            del(channel_config_update.read_set.groups['Application'].groups[orgName])
+            del(channel_config_update.write_set.groups['Application'].groups[orgName])
 
     user.setTagValue(create_channel_config_update_name, channel_config_update)
 
+@Given(u'the user "{user_name}" creates an existing channel config update "{existing_channel_config_update_name}" using config update "{input_config_update_name}"')
+def step_impl(context, user_name, existing_channel_config_update_name, input_config_update_name):
+    directory = bootstrap_util.getDirectory(context)
+    user = directory.getUser(user_name)
 
+    input_config_update = user.getTagValue(tagKey=input_config_update_name)
+
+    channel_id = context.table.rows[0]["ChannelID"]
+
+    peer_anchor_set_tag_key = context.table.rows[0]["[PeerAnchorSet]"]
+    peer_anchor_config_group = None
+    if peer_anchor_set_tag_key != "":
+        peer_anchor_config_group = user.getTagValue(tagKey=peer_anchor_set_tag_key)
+
+
+    assert peer_anchor_config_group != None, "Required to specify a PeerAnchorSet for now"
+    #TODO: Where does the system_channel_version come from?
+    system_channel_version = 0
+    channel_config_update = bootstrap_util.create_existing_channel_config_update(system_channel_version=system_channel_version,
+                                                                                 channel_id=channel_id,
+                                                                                 input_config_update=input_config_update,
+                                                                                 config_groups=[peer_anchor_config_group])
+
+    user.setTagValue(existing_channel_config_update_name, channel_config_update)
 
 @given(u'the following application developers are defined for peer organizations and each saves their cert as alias')
 def step_impl(context):
@@ -214,19 +253,19 @@ def step_impl(context, userName, certAlias, configUpdateTxName, createChannelSig
                                                                      typeAsString="CONFIG_UPDATE")
     user.setTagValue(configUpdateTxName, envelope_for_config_update)
 
-@given(u'the user "{userName}" using cert alias "{certAlias}" broadcasts ConfigUpdate Tx "{configTxName}" to orderer "{orderer}" to create channel "{channelId}"')
-def step_impl(context, userName, certAlias, configTxName, orderer, channelId):
+@given(u'the user "{userName}" using cert alias "{certAlias}" broadcasts ConfigUpdate Tx "{configTxName}" to orderer "{orderer}"')
+def step_impl(context, userName, certAlias, configTxName, orderer):
     directory = bootstrap_util.getDirectory(context)
     user = directory.getUser(userName=userName)
     configTxEnvelope = user.tags[configTxName]
-    bootstrap_util.broadcastCreateChannelConfigTx(context=context,certAlias=certAlias, composeService=orderer, chainId=channelId, user=user, configTxEnvelope=configTxEnvelope)
+    bootstrap_util.broadcastCreateChannelConfigTx(context=context,certAlias=certAlias, composeService=orderer, user=user, configTxEnvelope=configTxEnvelope)
 
-@when(u'the user "{userName}" broadcasts transaction "{transactionAlias}" to orderer "{orderer}" on channel "{channelId}"')
-def step_impl(context, userName, transactionAlias, orderer, channelId):
+@when(u'the user "{userName}" broadcasts transaction "{transactionAlias}" to orderer "{orderer}"')
+def step_impl(context, userName, transactionAlias, orderer):
     directory = bootstrap_util.getDirectory(context)
     user = directory.getUser(userName=userName)
     transaction = user.tags[transactionAlias]
-    bootstrap_util.broadcastCreateChannelConfigTx(context=context, certAlias=None, composeService=orderer, chainId=channelId, user=user, configTxEnvelope=transaction)
+    bootstrap_util.broadcastCreateChannelConfigTx(context=context, certAlias=None, composeService=orderer, user=user, configTxEnvelope=transaction)
 
 
 @when(u'user "{userName}" using cert alias "{certAlias}" connects to deliver function on orderer "{composeService}"')
@@ -234,9 +273,7 @@ def step_impl(context, userName, transactionAlias, orderer, channelId):
 def step_impl(context, userName, certAlias, composeService):
     directory = bootstrap_util.getDirectory(context)
     user = directory.getUser(userName=userName)
-    nodeAdminTuple = user.tags[certAlias]
-    cert = directory.findCertForNodeAdminTuple(nodeAdminTuple)
-    user.connectToDeliverFunction(context, composeService, certAlias, nodeAdminTuple=nodeAdminTuple)
+    user.connectToDeliverFunction(context, composeService, nodeAdminTuple=user.tags[certAlias])
 
 @when(u'user "{userName}" sends deliver a seek request on orderer "{composeService}" with properties')
 def step_impl(context, userName, composeService):
@@ -250,12 +287,15 @@ def step_impl(context, userName, composeService):
     streamHelper = user.getDelivererStreamHelper(context, composeService)
     streamHelper.seekToRange(chainID=chainID, start = start, end = end)
 
-@given(u'user "{userName}" retrieves the latest configuration "{latest_config_name}" from orderer "{service_name}" for channel "{channel_id_name}"')
-def step_impl(context, userName, latest_config_name, service_name, channel_id_name):
+@given(u'user "{userName}" retrieves the latest config update "{latest_config_name}" from orderer "{service_name}" for channel "{channel_id_or_ref}"')
+def step_impl(context, userName, latest_config_name, service_name, channel_id_or_ref):
+
+
     directory = bootstrap_util.getDirectory(context)
     user = directory.getUser(userName=userName)
+    (channel_id,) = bootstrap_util.get_args_for_user([channel_id_or_ref], user)
     streamHelper = user.getDelivererStreamHelper(context, service_name)
-    latest_config_block = bootstrap_util.get_latest_configuration_block(deliverer_stream_helper=streamHelper, channel_id=user.getTagValue(channel_id_name))
+    latest_config_block = bootstrap_util.get_latest_configuration_block(deliverer_stream_helper=streamHelper, channel_id=channel_id)
     channel_group = bootstrap_util.get_channel_group_from_config_block(latest_config_block)
     user.setTagValue(tagKey=latest_config_name, tagValue=channel_group)
     # raise NotImplementedError(u'STEP: Given user "configAdminOrdererOrg0" retrieves the latest configuration "latestOrdererConfig" from orderer "orderer0" for channel "OrdererSystemChainId"')
@@ -303,8 +343,8 @@ def step_impl(context, userName, proposalResponseName, proposalResponseResultCod
     print("ProposalResponse: \n{0}\n".format(proposalResponse))
     print("")
 
-@given(u'the user "{userName}" creates an peer anchor set "{anchorSetName}" for channel "{channelName}" for orgs')
-def step_impl(context, userName, anchorSetName, channelName):
+@given(u'the user "{userName}" creates an peer anchor set "{anchorSetName}" for orgs')
+def step_impl(context, userName, anchorSetName):
     directory = bootstrap_util.getDirectory(context)
     user = directory.getUser(userName=userName)
     nodeAdminTuples = [directory.findNodeAdminTuple(row['User'], row['Peer'], row['Organization']) for row in context.table.rows]
@@ -345,3 +385,9 @@ def step_impl(context, certAlias):
     for row in context.table.rows:
         nodeAdminNamedTuple = directory.registerOrdererAdminTuple(ordererBootstrapAdmin.name, "ordererBootstrapAdmin", row['Organization'])
         ordererBootstrapAdmin.setTagValue(certAlias, nodeAdminNamedTuple)
+
+@given(u'we "{command}" service "{service_name}"')
+def step_impl(context, command, service_name):
+    assert "composition" in context, "No composition found in context"
+    composition = context.composition
+    composition.issueCommand([command], [service_name])

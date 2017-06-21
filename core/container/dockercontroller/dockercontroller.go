@@ -207,7 +207,7 @@ func (vm *DockerVM) Deploy(ctxt context.Context, ccid ccintf.CCID,
 
 //Start starts a container using a previously created docker image
 func (vm *DockerVM) Start(ctxt context.Context, ccid ccintf.CCID,
-	args []string, env []string, builder container.BuildSpecFactory) error {
+	args []string, env []string, builder container.BuildSpecFactory, prelaunchFunc container.PrelaunchFunc) error {
 	imageID, err := vm.GetVMName(ccid)
 	if err != nil {
 		return err
@@ -232,11 +232,13 @@ func (vm *DockerVM) Start(ctxt context.Context, ccid ccintf.CCID,
 		//if image not found try to create image and retry
 		if err == docker.ErrNoSuchImage {
 			if builder != nil {
-				dockerLogger.Debugf("start-could not find image ...attempt to recreate image %s", err)
+				dockerLogger.Debugf("start-could not find image <%s> (container id <%s>), because of <%s>..."+
+					"attempt to recreate image", imageID, containerID, err)
 
 				reader, err1 := builder()
 				if err1 != nil {
-					dockerLogger.Errorf("Error creating image builder: %s", err1)
+					dockerLogger.Errorf("Error creating image builder for image <%s> (container id <%s>), "+
+						"because of <%s>", imageID, containerID, err1)
 				}
 
 				if err1 = vm.deployImage(client, ccid, args, env, reader); err1 != nil {
@@ -249,11 +251,11 @@ func (vm *DockerVM) Start(ctxt context.Context, ccid ccintf.CCID,
 					return err1
 				}
 			} else {
-				dockerLogger.Errorf("start-could not find image: %s", err)
+				dockerLogger.Errorf("start-could not find image <%s>, because of %s", imageID, err)
 				return err
 			}
 		} else {
-			dockerLogger.Errorf("start-could not recreate container: %s", err)
+			dockerLogger.Errorf("start-could not recreate container <%s>, because of %s", containerID, err)
 			return err
 		}
 	}
@@ -326,6 +328,12 @@ func (vm *DockerVM) Start(ctxt context.Context, ccid ccintf.CCID,
 				containerLogger.Info(line)
 			}
 		}()
+	}
+
+	if prelaunchFunc != nil {
+		if err = prelaunchFunc(); err != nil {
+			return err
+		}
 	}
 
 	// start container with HostConfig was deprecated since v1.10 and removed in v1.2
@@ -404,7 +412,7 @@ func (vm *DockerVM) Destroy(ctxt context.Context, ccid ccintf.CCID, force bool, 
 	if err != nil {
 		dockerLogger.Errorf("error while destroying image: %s", err)
 	} else {
-		dockerLogger.Debug("Destroyed image %s", id)
+		dockerLogger.Debugf("Destroyed image %s", id)
 	}
 
 	return err

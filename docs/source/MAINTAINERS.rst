@@ -10,7 +10,7 @@ Maintainers
 +---------------------------+---------------------+------------------+----------------+--------------------------------+
 | Chris Ferris              | ChristopherFerris   | christo4ferris   | cbf            | chris.ferris@gmail.com         |
 +---------------------------+---------------------+------------------+----------------+--------------------------------+
-| Dave Enyart               | denyeart            | denyeart         | dave.enyeart   | enyeart@us.ibm.com             |
+| Dave Enyeart              | denyeart            | denyeart         | dave.enyeart   | enyeart@us.ibm.com             |
 +---------------------------+---------------------+------------------+----------------+--------------------------------+
 | Gabor Hosszu              | hgabre              | gabre            | hgabor         | gabor@digitalasset.com         |
 +---------------------------+---------------------+------------------+----------------+--------------------------------+
@@ -28,6 +28,8 @@ Maintainers
 +---------------------------+---------------------+------------------+----------------+--------------------------------+
 | Kostas Christidis         | kchristidis         | kchristidis      | kostas         | kostas@gmail.com               |
 +---------------------------+---------------------+------------------+----------------+--------------------------------+
+| Manish Sethi              | manish-sethi        | manish-sethi     | manish-sethi   | manish.sethi@gmail.com         |
++---------------------------+---------------------+------------------+----------------+--------------------------------+
 | Sheehan Anderson          | sheehan             | srderson         | sheehan        | sranderson@gmail.com           |
 +---------------------------+---------------------+------------------+----------------+--------------------------------+
 | Srinivasan Muralidharan   | muralisr            | muralisrini      | muralisr       | muralisr@us.ibm.com            |
@@ -36,3 +38,6 @@ Maintainers
 +---------------------------+---------------------+------------------+----------------+--------------------------------+
 | Yacov Manevich            | yacovm              | yacovm           | yacovm         | yacovm@il.ibm.com              |
 +---------------------------+---------------------+------------------+----------------+--------------------------------+
+
+.. Licensed under Creative Commons Attribution 4.0 International License
+   https://creativecommons.org/licenses/by/4.0/

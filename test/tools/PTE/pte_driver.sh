@@ -1,5 +1,9 @@
 #!/bin/bash
-
+#
+# Copyright IBM Corp. All Rights Reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
 #
 # usage: ./pte_driver.sh <user input file>
 # example: ./pte_driver.sh runCases.txt
@@ -46,7 +50,7 @@ do
 
 done < $1
 
-echo "Node Array: ${nodeArray[@]}, ${nodeArray[*]}"
+echo "Node Array: ${nodeArray[@]}"
 
 # node requests
 function nodeProc {

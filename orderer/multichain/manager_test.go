@@ -17,6 +17,7 @@ limitations under the License.
 package multichain
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -34,22 +35,29 @@ import (
 	ab "github.com/hyperledger/fabric/protos/orderer"
 	"github.com/hyperledger/fabric/protos/utils"
 
-	"errors"
-
 	mmsp "github.com/hyperledger/fabric/common/mocks/msp"
 	logging "github.com/op/go-logging"
 	"github.com/stretchr/testify/assert"
 )
 
-var conf *genesisconfig.Profile
-var genesisBlock = cb.NewBlock(0, nil) // *cb.Block
+var conf, singleMSPConf, noConsortiumConf *genesisconfig.Profile
+var genesisBlock, singleMSPGenesisBlock, noConsortiumGenesisBlock *cb.Block
 var mockSigningIdentity msp.SigningIdentity
 
+const NoConsortiumChain = "no-consortium-chain"
+
 func init() {
-	conf = genesisconfig.Load(genesisconfig.SampleInsecureProfile)
 	logging.SetLevel(logging.DEBUG, "")
-	genesisBlock = provisional.New(conf).GenesisBlock()
 	mockSigningIdentity, _ = mmsp.NewNoopMsp().GetDefaultSigningIdentity()
+
+	conf = genesisconfig.Load(genesisconfig.SampleInsecureProfile)
+	genesisBlock = provisional.New(conf).GenesisBlock()
+
+	singleMSPConf = genesisconfig.Load(genesisconfig.SampleSingleMSPSoloProfile)
+	singleMSPGenesisBlock = provisional.New(singleMSPConf).GenesisBlock()
+
+	noConsortiumConf = genesisconfig.Load("SampleNoConsortium")
+	noConsortiumGenesisBlock = provisional.New(noConsortiumConf).GenesisBlockForChannel(NoConsortiumChain)
 }
 
 func mockCrypto() *mockCryptoHelper {
@@ -64,18 +72,6 @@ func (mch mockCryptoHelper) VerifySignature(sd *cb.SignedData) error {
 	return nil
 }
 
-func mockCryptoRejector() *mockCryptoRejectorHelper {
-	return &mockCryptoRejectorHelper{LocalSigner: mockcrypto.FakeLocalSigner}
-}
-
-type mockCryptoRejectorHelper struct {
-	*mockcrypto.LocalSigner
-}
-
-func (mch mockCryptoRejectorHelper) VerifySignature(sd *cb.SignedData) error {
-	return errors.New("Nope")
-}
-
 func NewRAMLedgerAndFactory(maxSize int) (ledger.Factory, ledger.ReadWriter) {
 	rlf := ramledger.New(10)
 	rl, err := rlf.GetOrCreate(provisional.TestChainID)
@@ -83,6 +79,20 @@ func NewRAMLedgerAndFactory(maxSize int) (ledger.Factory, ledger.ReadWriter) {
 		panic(err)
 	}
 	err = rl.Append(genesisBlock)
+	if err != nil {
+		panic(err)
+	}
+	return rlf, rl
+}
+
+func NewRAMLedgerAndFactoryWithMSP() (ledger.Factory, ledger.ReadWriter) {
+	rlf := ramledger.New(10)
+
+	rl, err := rlf.GetOrCreate(provisional.TestChainID)
+	if err != nil {
+		panic(err)
+	}
+	err = rl.Append(singleMSPGenesisBlock)
 	if err != nil {
 		panic(err)
 	}
@@ -109,10 +119,7 @@ func TestGetConfigTx(t *testing.T) {
 	rl.Append(block)
 
 	pctx := getConfigTx(rl)
-
-	if !reflect.DeepEqual(ctx, pctx) {
-		t.Fatalf("Did not select most recent config transaction")
-	}
+	assert.Equal(t, pctx, ctx, "Did not select most recent config transaction")
 }
 
 // Tests a chain which contains blocks with multi-transactions mixed with config txs, and a single tx which is not a config tx, none count as config blocks so nil should return
@@ -125,29 +132,21 @@ func TestGetConfigTxFailure(t *testing.T) {
 		}))
 	}
 	rl.Append(ledger.CreateNextBlock(rl, []*cb.Envelope{makeNormalTx(provisional.TestChainID, 11)}))
-	defer func() {
-		if recover() == nil {
-			t.Fatalf("Should have panic-ed because there was no config tx")
-		}
-	}()
-	getConfigTx(rl)
+	assert.Panics(t, func() { getConfigTx(rl) }, "Should have panicked because there was no config tx")
 
+	block := ledger.CreateNextBlock(rl, []*cb.Envelope{makeNormalTx(provisional.TestChainID, 12)})
+	block.Metadata.Metadata[cb.BlockMetadataIndex_LAST_CONFIG] = []byte("bad metadata")
+	assert.Panics(t, func() { getConfigTx(rl) }, "Should have panicked because of bad last config metadata")
 }
 
 // This test checks to make sure the orderer refuses to come up if it cannot find a system channel
 func TestNoSystemChain(t *testing.T) {
-	defer func() {
-		if recover() == nil {
-			t.Fatalf("Should have panicked when starting without a system chain")
-		}
-	}()
-
 	lf := ramledger.New(10)
 
 	consenters := make(map[string]Consenter)
 	consenters[conf.Orderer.OrdererType] = &mockConsenter{}
 
-	NewManagerImpl(lf, consenters, mockCrypto())
+	assert.Panics(t, func() { NewManagerImpl(lf, consenters, mockCrypto()) }, "Should have panicked when starting without a system chain")
 }
 
 // This test checks to make sure that the orderer refuses to come up if there are multiple system channels
@@ -168,6 +167,74 @@ func TestMultiSystemChannel(t *testing.T) {
 	assert.Panics(t, func() { NewManagerImpl(lf, consenters, mockCrypto()) }, "Two system channels should have caused panic")
 }
 
+// This test checks to make sure that the orderer creates different type of filters given different type of channel
+func TestFilterCreation(t *testing.T) {
+	lf := ramledger.New(10)
+	rl, err := lf.GetOrCreate(provisional.TestChainID)
+	if err != nil {
+		panic(err)
+	}
+	err = rl.Append(genesisBlock)
+	if err != nil {
+		panic(err)
+	}
+
+	// Creating a non-system chain to test that NewManagerImpl could handle the diversity
+	rl, err = lf.GetOrCreate(NoConsortiumChain)
+	if err != nil {
+		panic(err)
+	}
+	err = rl.Append(noConsortiumGenesisBlock)
+	if err != nil {
+		panic(err)
+	}
+
+	consenters := make(map[string]Consenter)
+	consenters[conf.Orderer.OrdererType] = &mockConsenter{}
+
+	manager := NewManagerImpl(lf, consenters, mockCrypto())
+
+	_, ok := manager.GetChain(provisional.TestChainID)
+	assert.True(t, ok, "Should have found chain: %d", provisional.TestChainID)
+
+	chainSupport, ok := manager.GetChain(NoConsortiumChain)
+	assert.True(t, ok, "Should have retrieved chain: %d", NoConsortiumChain)
+
+	messages := make([]*cb.Envelope, conf.Orderer.BatchSize.MaxMessageCount)
+	for i := 0; i < int(conf.Orderer.BatchSize.MaxMessageCount); i++ {
+		messages[i] = &cb.Envelope{
+			Payload: utils.MarshalOrPanic(&cb.Payload{
+				Header: &cb.Header{
+					ChannelHeader: utils.MarshalOrPanic(&cb.ChannelHeader{
+						// For testing purpose, we are injecting configTx into non-system channel.
+						// Set Type to HeaderType_ORDERER_TRANSACTION to verify this message is NOT
+						// filtered by SystemChainFilter, so we know we are creating correct type
+						// of filter for the chain.
+						Type:      int32(cb.HeaderType_ORDERER_TRANSACTION),
+						ChannelId: NoConsortiumChain,
+					}),
+					SignatureHeader: utils.MarshalOrPanic(&cb.SignatureHeader{}),
+				},
+				Data: []byte(fmt.Sprintf("%d", i)),
+			}),
+		}
+
+		assert.True(t, chainSupport.Enqueue(messages[i]), "Should have successfully enqueued message")
+	}
+
+	it, _ := rl.Iterator(&ab.SeekPosition{Type: &ab.SeekPosition_Specified{Specified: &ab.SeekSpecified{Number: 1}}})
+	select {
+	case <-it.ReadyChan():
+		block, status := it.Next()
+		assert.Equal(t, cb.Status_SUCCESS, status, "Could not retrieve block")
+		for i := 0; i < int(conf.Orderer.BatchSize.MaxMessageCount); i++ {
+			assert.Equal(t, messages[i], utils.ExtractEnvelopeOrPanic(block, i), "Block contents wrong at index %d", i)
+		}
+	case <-time.After(time.Second):
+		t.Fatalf("Block 1 not produced after timeout")
+	}
+}
+
 // This test essentially brings the entire system up and is ultimately what main.go will replicate
 func TestManagerImpl(t *testing.T) {
 	lf, rl := NewRAMLedgerAndFactory(10)
@@ -178,15 +245,10 @@ func TestManagerImpl(t *testing.T) {
 	manager := NewManagerImpl(lf, consenters, mockCrypto())
 
 	_, ok := manager.GetChain("Fake")
-	if ok {
-		t.Errorf("Should not have found a chain that was not created")
-	}
+	assert.False(t, ok, "Should not have found a chain that was not created")
 
 	chainSupport, ok := manager.GetChain(provisional.TestChainID)
-
-	if !ok {
-		t.Fatalf("Should have gotten chain which was initialized by ramledger")
-	}
+	assert.True(t, ok, "Should have gotten chain which was initialized by ramledger")
 
 	messages := make([]*cb.Envelope, conf.Orderer.BatchSize.MaxMessageCount)
 	for i := 0; i < int(conf.Orderer.BatchSize.MaxMessageCount); i++ {
@@ -201,61 +263,17 @@ func TestManagerImpl(t *testing.T) {
 	select {
 	case <-it.ReadyChan():
 		block, status := it.Next()
-		if status != cb.Status_SUCCESS {
-			t.Fatalf("Could not retrieve block")
-		}
+		assert.Equal(t, cb.Status_SUCCESS, status, "Could not retrieve block")
 		for i := 0; i < int(conf.Orderer.BatchSize.MaxMessageCount); i++ {
-			if !reflect.DeepEqual(utils.ExtractEnvelopeOrPanic(block, i), messages[i]) {
-				t.Errorf("Block contents wrong at index %d", i)
-			}
+			assert.Equal(t, messages[i], utils.ExtractEnvelopeOrPanic(block, i), "Block contents wrong at index %d", i)
 		}
 	case <-time.After(time.Second):
 		t.Fatalf("Block 1 not produced after timeout")
 	}
 }
 
-/*
-// This test makes sure that the signature filter works
-func TestSignatureFilter(t *testing.T) {
-	lf, rl := NewRAMLedgerAndFactory(10)
-
-	consenters := make(map[string]Consenter)
-	consenters[conf.Orderer.OrdererType] = &mockConsenter{}
-
-	manager := NewManagerImpl(lf, consenters, mockCryptoRejector())
-
-	cs, ok := manager.GetChain(provisional.TestChainID)
-
-	if !ok {
-		t.Fatalf("Should have gotten chain which was initialized by ramledger")
-	}
-
-	messages := make([]*cb.Envelope, conf.Orderer.BatchSize.MaxMessageCount)
-	for i := 0; i < int(conf.Orderer.BatchSize.MaxMessageCount); i++ {
-		messages[i] = makeSignaturelessTx(provisional.TestChainID, i)
-	}
-
-	for _, message := range messages {
-		cs.Enqueue(message)
-	}
-
-	// Causes the consenter thread to exit after it processes all messages
-	close(cs.(*chainSupport).chain.(*mockChain).queue)
-
-	it, _ := rl.Iterator(&ab.SeekPosition{Type: &ab.SeekPosition_Specified{Specified: &ab.SeekSpecified{Number: 1}}})
-	select {
-	case <-it.ReadyChan():
-		// Will unblock if a block is created
-		t.Fatalf("Block 1 should not have been created")
-	case <-cs.(*chainSupport).chain.(*mockChain).done:
-		// Will unblock once the consenter thread has exited
-	}
-}
-*/
-
 func TestNewChannelConfig(t *testing.T) {
-
-	lf, _ := NewRAMLedgerAndFactory(3)
+	lf, _ := NewRAMLedgerAndFactoryWithMSP()
 
 	consenters := make(map[string]Consenter)
 	consenters[conf.Orderer.OrdererType] = &mockConsenter{}
@@ -263,7 +281,7 @@ func TestNewChannelConfig(t *testing.T) {
 
 	t.Run("BadPayload", func(t *testing.T) {
 		_, err := manager.NewChannelConfig(&cb.Envelope{Payload: []byte("bad payload")})
-		assert.Error(t, err, "Should bot be able to create new channel config from bad payload.")
+		assert.Error(t, err, "Should not be able to create new channel config from bad payload.")
 	})
 
 	for _, tc := range []struct {
@@ -417,6 +435,65 @@ func TestNewChannelConfig(t *testing.T) {
 			},
 			"^Unknown consortium name:",
 		},
+		{
+			"Missing consortium members",
+			&cb.Payload{
+				Data: utils.MarshalOrPanic(&cb.ConfigUpdateEnvelope{
+					ConfigUpdate: utils.MarshalOrPanic(
+						&cb.ConfigUpdate{
+							WriteSet: &cb.ConfigGroup{
+								Groups: map[string]*cb.ConfigGroup{
+									config.ApplicationGroupKey: &cb.ConfigGroup{
+										Version: 1,
+									},
+								},
+								Values: map[string]*cb.ConfigValue{
+									config.ConsortiumKey: &cb.ConfigValue{
+										Value: utils.MarshalOrPanic(
+											&cb.Consortium{
+												Name: genesisconfig.SampleConsortiumName,
+											},
+										),
+									},
+								},
+							},
+						},
+					),
+				}),
+			},
+			"Proposed configuration has no application group members, but consortium contains members",
+		},
+		{
+			"Member not in consortium",
+			&cb.Payload{
+				Data: utils.MarshalOrPanic(&cb.ConfigUpdateEnvelope{
+					ConfigUpdate: utils.MarshalOrPanic(
+						&cb.ConfigUpdate{
+							WriteSet: &cb.ConfigGroup{
+								Groups: map[string]*cb.ConfigGroup{
+									config.ApplicationGroupKey: &cb.ConfigGroup{
+										Version: 1,
+										Groups: map[string]*cb.ConfigGroup{
+											"BadOrgName": &cb.ConfigGroup{},
+										},
+									},
+								},
+								Values: map[string]*cb.ConfigValue{
+									config.ConsortiumKey: &cb.ConfigValue{
+										Value: utils.MarshalOrPanic(
+											&cb.Consortium{
+												Name: genesisconfig.SampleConsortiumName,
+											},
+										),
+									},
+								},
+							},
+						},
+					),
+				}),
+			},
+			"Attempted to include a member which is not in the consortium",
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := manager.NewChannelConfig(&cb.Envelope{Payload: utils.MarshalOrPanic(tc.payload)})
@@ -432,7 +509,7 @@ func TestNewChannelConfig(t *testing.T) {
 func TestNewChain(t *testing.T) {
 	expectedLastConfigBlockNumber := uint64(0)
 	expectedLastConfigSeq := uint64(1)
-	newChainID := "TestNewChain"
+	newChainID := "test-new-chain"
 
 	lf, rl := NewRAMLedgerAndFactory(10)
 
@@ -524,6 +601,15 @@ func TestNewChain(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatalf("Block 1 not produced after timeout on new chain")
 	}
+
+	testRestartedChainSupport(t, chainSupport, consenters, expectedLastConfigSeq)
+}
+
+func testRestartedChainSupport(t *testing.T, cs ChainSupport, consenters map[string]Consenter, expectedLastConfigSeq uint64) {
+	ccs, ok := cs.(*chainSupport)
+	assert.True(t, ok, "Casting error")
+	rcs := newChainSupport(ccs.filters, ccs.ledgerResources, consenters, mockCrypto())
+	assert.Equal(t, expectedLastConfigSeq, rcs.lastConfigSeq, "On restart, incorrect lastConfigSeq")
 }
 
 func testLastConfigBlockNumber(t *testing.T, block *cb.Block, expectedBlockNumber uint64) {

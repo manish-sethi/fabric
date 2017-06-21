@@ -120,7 +120,7 @@ func (bc *broadcastClient) doAction(action func() (interface{}, error)) (interfa
 	}
 	resp, err := action()
 	if err != nil {
-		bc.disconnect()
+		bc.Disconnect()
 		return nil, err
 	}
 	return resp, nil
@@ -139,25 +139,26 @@ func (bc *broadcastClient) connect() error {
 		logger.Error("Failed obtaining connection:", err)
 		return err
 	}
-	abc, err := bc.createClient(conn).Deliver(context.Background())
+	ctx, cf := context.WithCancel(context.Background())
+	abc, err := bc.createClient(conn).Deliver(ctx)
 	if err != nil {
 		logger.Error("Connection to ", endpoint, "established but was unable to create gRPC stream:", err)
 		conn.Close()
 		return err
 	}
-	err = bc.afterConnect(conn, abc)
+	err = bc.afterConnect(conn, abc, cf)
 	if err == nil {
 		return nil
 	}
 	// If we reached here, lets make sure connection is closed
 	// and nullified before we return
-	bc.disconnect()
+	bc.Disconnect()
 	return err
 }
 
-func (bc *broadcastClient) afterConnect(conn *grpc.ClientConn, abc orderer.AtomicBroadcast_DeliverClient) error {
+func (bc *broadcastClient) afterConnect(conn *grpc.ClientConn, abc orderer.AtomicBroadcast_DeliverClient, cf context.CancelFunc) error {
 	bc.Lock()
-	bc.conn = &connection{ClientConn: conn}
+	bc.conn = &connection{ClientConn: conn, cancel: cf}
 	bc.BlocksDeliverer = abc
 	if bc.shouldStop() {
 		bc.Unlock()
@@ -191,6 +192,7 @@ func (bc *broadcastClient) shouldStop() bool {
 	return atomic.LoadInt32(&bc.stopFlag) == int32(1)
 }
 
+// Close makes the client close its connection and shut down
 func (bc *broadcastClient) Close() {
 	bc.Lock()
 	defer bc.Unlock()
@@ -205,7 +207,8 @@ func (bc *broadcastClient) Close() {
 	bc.conn.Close()
 }
 
-func (bc *broadcastClient) disconnect() {
+// Disconnect makes the client close the existing connection
+func (bc *broadcastClient) Disconnect() {
 	bc.Lock()
 	defer bc.Unlock()
 	if bc.conn == nil {
@@ -217,13 +220,15 @@ func (bc *broadcastClient) disconnect() {
 }
 
 type connection struct {
-	*grpc.ClientConn
 	sync.Once
+	*grpc.ClientConn
+	cancel context.CancelFunc
 }
 
 func (c *connection) Close() error {
 	var err error
 	c.Once.Do(func() {
+		c.cancel()
 		err = c.ClientConn.Close()
 	})
 	return err

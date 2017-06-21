@@ -30,7 +30,6 @@ import (
 
 	"path/filepath"
 
-	bccsp "github.com/hyperledger/fabric/bccsp/factory"
 	cf "github.com/hyperledger/fabric/core/config"
 )
 
@@ -59,6 +58,8 @@ const (
 	SampleInsecureProfile = "SampleInsecureSolo"
 	// SampleSingleMSPSoloProfile references the sample profile which includes only the sample MSP and uses solo for ordering.
 	SampleSingleMSPSoloProfile = "SampleSingleMSPSolo"
+	// SampleSingleMSPChannelProfile references the sample profile which includes only the sample MSP and is used to create a channel
+	SampleSingleMSPChannelProfile = "SampleSingleMSPChannel"
 
 	// SampleConsortiumName is the sample consortium from the sample configtx.yaml
 	SampleConsortiumName = "SampleConsortium"
@@ -99,11 +100,10 @@ type Application struct {
 
 // Organization encodes the organization-level configuration needed in config transactions.
 type Organization struct {
-	Name           string             `yaml:"Name"`
-	ID             string             `yaml:"ID"`
-	MSPDir         string             `yaml:"MSPDir"`
-	AdminPrincipal string             `yaml:"AdminPrincipal"`
-	BCCSP          *bccsp.FactoryOpts `yaml:"BCCSP"`
+	Name           string `yaml:"Name"`
+	ID             string `yaml:"ID"`
+	MSPDir         string `yaml:"MSPDir"`
+	AdminPrincipal string `yaml:"AdminPrincipal"`
 
 	// Note: Viper deserialization does not seem to care for
 	// embedding of types, so we use one organization struct
@@ -154,7 +154,7 @@ var genesisDefaults = TopLevel{
 		BatchTimeout: 2 * time.Second,
 		BatchSize: BatchSize{
 			MaxMessageCount:   10,
-			AbsoluteMaxBytes:  100000000,
+			AbsoluteMaxBytes:  10 * 1024 * 1024,
 			PreferredMaxBytes: 512 * 1024,
 		},
 		Kafka: Kafka{
@@ -265,5 +265,4 @@ func (p *Profile) completeInitialization(configDir string) {
 
 func translatePaths(configDir string, org *Organization) {
 	cf.TranslatePathInPlace(configDir, &org.MSPDir)
-	cf.TranslatePathInPlace(configDir, &org.BCCSP.SwOpts.FileKeystore.KeyStorePath)
 }

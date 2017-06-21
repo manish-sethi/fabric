@@ -83,7 +83,7 @@ func (mcc *mockChainCreator) NewChannelConfig(envConfigUpdate *cb.Envelope) (con
 }
 
 func TestGoodProposal(t *testing.T) {
-	newChainID := "NewChainID"
+	newChainID := "new-chain-id"
 
 	mcc := newMockChainCreator()
 
@@ -95,9 +95,7 @@ func TestGoodProposal(t *testing.T) {
 		),
 		configtx.NewChainCreationTemplate("SampleConsortium", []string{}),
 	).Envelope(newChainID)
-	if err != nil {
-		t.Fatalf("Error constructing configtx")
-	}
+	assert.Nil(t, err, "Error constructing configtx")
 
 	ingressTx := makeConfigTxFromConfigUpdateEnvelope(newChainID, configEnv)
 	wrapped := wrapConfigTx(ingressTx)

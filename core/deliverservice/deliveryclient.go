@@ -1,17 +1,7 @@
 /*
-Copyright IBM Corp. 2016 All Rights Reserved.
+Copyright IBM Corp. All Rights Reserved.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-                 http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+SPDX-License-Identifier: Apache-2.0
 */
 
 package deliverclient
@@ -41,6 +31,7 @@ func init() {
 var (
 	reConnectTotalTimeThreshold = time.Second * 60 * 5
 	connTimeout                 = time.Second * 3
+	reConnectBackoffThreshold   = float64(time.Hour)
 )
 
 // DeliverService used to communicate with orderers to obtain
@@ -73,8 +64,8 @@ type deliverServiceImpl struct {
 // how it verifies messages received from it,
 // and how it disseminates the messages to other peers
 type Config struct {
-	// ConnFactory creates a connection to an endpoint
-	ConnFactory func(endpoint string) (*grpc.ClientConn, error)
+	// ConnFactory returns a function that creates a connection to an endpoint
+	ConnFactory func(channelID string) func(endpoint string) (*grpc.ClientConn, error)
 	// ABCFactory creates an AtomicBroadcastClient out of a connection
 	ABCFactory func(*grpc.ClientConn) orderer.AtomicBroadcastClient
 	// CryptoSvc performs cryptographic actions like message verification and signing
@@ -191,24 +182,37 @@ func (d *deliverServiceImpl) newClient(chainID string, ledgerInfoProvider blocks
 		if elapsedTime.Nanoseconds() > reConnectTotalTimeThreshold.Nanoseconds() {
 			return 0, false
 		}
-		return time.Duration(math.Pow(2, float64(attemptNum))) * time.Millisecond * 500, true
+		sleepIncrement := float64(time.Millisecond * 500)
+		attempt := float64(attemptNum)
+		return time.Duration(math.Min(math.Pow(2, attempt)*sleepIncrement, reConnectBackoffThreshold)), true
 	}
-	connProd := comm.NewConnectionProducer(d.conf.ConnFactory, d.conf.Endpoints)
+	connProd := comm.NewConnectionProducer(d.conf.ConnFactory(chainID), d.conf.Endpoints)
 	bClient := NewBroadcastClient(connProd, d.conf.ABCFactory, broadcastSetup, backoffPolicy)
 	requester.client = bClient
 	return bClient
 }
 
-func DefaultConnectionFactory(endpoint string) (*grpc.ClientConn, error) {
-	dialOpts := []grpc.DialOption{grpc.WithTimeout(connTimeout), grpc.WithBlock()}
+func DefaultConnectionFactory(channelID string) func(endpoint string) (*grpc.ClientConn, error) {
+	return func(endpoint string) (*grpc.ClientConn, error) {
+		dialOpts := []grpc.DialOption{grpc.WithTimeout(connTimeout), grpc.WithBlock()}
+		// set max send/recv msg sizes
+		dialOpts = append(dialOpts, grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(comm.MaxRecvMsgSize()),
+			grpc.MaxCallSendMsgSize(comm.MaxSendMsgSize())))
+		// set the keepalive options
+		dialOpts = append(dialOpts, comm.ClientKeepaliveOptions()...)
 
-	if comm.TLSEnabled() {
-		dialOpts = append(dialOpts, grpc.WithTransportCredentials(comm.GetCASupport().GetDeliverServiceCredentials()))
-	} else {
-		dialOpts = append(dialOpts, grpc.WithInsecure())
+		if comm.TLSEnabled() {
+			creds, err := comm.GetCASupport().GetDeliverServiceCredentials(channelID)
+			if err != nil {
+				return nil, fmt.Errorf("Failed obtaining credentials for channel %s: %v", channelID, err)
+			}
+			dialOpts = append(dialOpts, grpc.WithTransportCredentials(creds))
+		} else {
+			dialOpts = append(dialOpts, grpc.WithInsecure())
+		}
+		grpc.EnableTracing = true
+		return grpc.Dial(endpoint, dialOpts...)
 	}
-	grpc.EnableTracing = true
-	return grpc.Dial(endpoint, dialOpts...)
 }
 
 func DefaultABCFactory(conn *grpc.ClientConn) orderer.AtomicBroadcastClient {
