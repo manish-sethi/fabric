@@ -125,3 +125,59 @@ type TxSimulator interface {
 	// of information in different way in order to support different data-models or optimize the information representations.
 	GetTxSimulationResults() ([]byte, error)
 }
+
+// PrivacyEnabledQuerier specifies the query functions for private data
+type PrivacyEnabledQuerier interface {
+	GetPrivateState(namespace, collection, key string) ([]byte, error)
+	GetPrivateStateMultipleKeys(namespace, collection string, keys []string) ([][]byte, error)
+	GetPrivateStateRangeScanIterator(namespace, collection, startKey, endKey string) (commonledger.ResultsIterator, error)
+	ExecuteQueryOnPrivateData(namespace, collection, query string) (commonledger.ResultsIterator, error)
+}
+
+// PrivacyEnabledUpdater specifies the update functions for private data
+type PrivacyEnabledUpdater interface {
+	PrivacyEnabledQuerier
+	CreatePrivateState(namespace, collection, key string, value []byte) error
+	SetPrivateState(namespace, collection, key string, value []byte) error
+	SetPrivateStateMultipleKeys(namespace, collection, kvs map[string][]byte) error
+	DeletePrivateState(namespace, collection, key string) error
+	RemovePrivateState(namespace, collection, key string) error
+}
+
+// PrivacyEnabledQueryExecutor is the query executor that a privacy enabled ledger returns
+type PrivacyEnabledQueryExecutor interface {
+	QueryExecutor
+	PrivacyEnabledQuerier
+}
+
+// PrivacyEnabledHistoryQueryExecutor enables historical queries on private data
+type PrivacyEnabledHistoryQueryExecutor interface {
+	HistoryQueryExecutor
+	GetHistoryForPrivateKey(namespace, collection, key string) (commonledger.ResultsIterator, error)
+}
+
+// PrivacyEnabledTxSimulator is the transaction simulator that a privacy enabled ledger returns
+type PrivacyEnabledTxSimulator interface {
+	TxSimulator
+	PrivacyEnabledUpdater
+	GetPrivateSimulationResults() ([]byte, error) // define protos for private RWSet
+}
+
+// PrivacyEnabledPeerLedger is the peer ledger that can maintain private data and execute transactions accordingly.
+// NewTxSimulator function returns of type PrivacyEnabledTxSimulator
+// NewQueryExecuter function returns of type PrivacyEnabledQueryExecutor
+type PrivacyEnabledPeerLedger interface {
+	PeerLedger
+	GetPrivateSimulationResults(txid string) []*EndorserPrivateSimulationResults
+	PutPrivateSimulationResults(txid, endorserid string, privateSimulationResults []byte)
+	PurgeTransientData(blockNum uint64) error
+	PurgePrivateData(blockNum uint64) error
+	PrivateDataMinBlockNum() (uint64, error)
+	TransientDataMinBlockNum() (uint64, error)
+}
+
+// EndorserPrivateSimulationResults captures the deatils of the simulation results specific to an endorser
+type EndorserPrivateSimulationResults struct {
+	endorserid               string
+	privateSimulationResults []byte
+}
