@@ -54,6 +54,11 @@ func GetHistoryLevelDBPath() string {
 	return filepath.Join(GetRootPath(), "historyLeveldb")
 }
 
+// GetTransientStorePath returns the filesystem path that is used to temporarily store the private rwset
+func GetTransientStorePath() string {
+	return filepath.Join(GetRootPath(), "transientStore")
+}
+
 // GetBlockStorePath returns the filesystem path that is used for the chain block stores
 func GetBlockStorePath() string {
 	return filepath.Join(GetRootPath(), "chains")
