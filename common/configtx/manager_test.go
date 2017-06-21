@@ -30,7 +30,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var defaultChain = "DefaultChainID"
+var defaultChain = "default.chain.id"
 
 func defaultInitializer() *mockconfigtx.Initializer {
 	return &mockconfigtx.Initializer{
@@ -131,6 +131,23 @@ func TestCallback(t *testing.T) {
 	if calledBack != cm {
 		t.Fatalf("Should have called back with the correct manager")
 	}
+}
+
+func TestEmptyChannel(t *testing.T) {
+	_, err := NewManagerImpl(&cb.Envelope{
+		Payload: utils.MarshalOrPanic(&cb.Payload{
+			Header: &cb.Header{
+				ChannelHeader: utils.MarshalOrPanic(&cb.ChannelHeader{
+					Type:      int32(cb.HeaderType_CONFIG),
+					ChannelId: "foo",
+				}),
+			},
+			Data: utils.MarshalOrPanic(&cb.ConfigEnvelope{
+				Config: &cb.Config{},
+			}),
+		}),
+	}, defaultInitializer(), nil)
+	assert.Error(t, err)
 }
 
 // TestDifferentChainID tests that a config update for a different chain ID fails

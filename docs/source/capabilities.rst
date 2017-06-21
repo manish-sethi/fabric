@@ -1,5 +1,5 @@
-Fabric Capabilities
-===================
+Hyperledger Fabric Capabilities
+===============================
 
 Hyperledger Fabric is a unique implementation of distributed ledger technology
 (DLT) that delivers enterprise-ready network security, scalability,
@@ -70,3 +70,6 @@ any industry or public domain can adopt, with the assurance that its networks
 will be interoperable across market, regulatory and geographic boundaries. By
 contrast, current alternatives to Hyperledger Fabric are largely partisan,
 constrained and industry-specific.
+
+.. Licensed under Creative Commons Attribution 4.0 International License
+   https://creativecommons.org/licenses/by/4.0/

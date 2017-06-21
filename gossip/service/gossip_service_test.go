@@ -41,7 +41,6 @@ import (
 	"github.com/hyperledger/fabric/peer/gossip/mocks"
 	"github.com/hyperledger/fabric/protos/common"
 	"github.com/hyperledger/fabric/protos/peer"
-	"github.com/op/go-logging"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc"
@@ -332,9 +331,6 @@ func TestLeaderElectionWithRealGossip(t *testing.T) {
 	// Check correct leader still exist for first channel and new correct leader chosen in second channel
 	// Stop gossip instances of leader peers for both channels and see that new leader chosen for both
 
-	logging.SetLevel(logging.DEBUG, util.LoggingElectionModule)
-	logging.SetLevel(logging.DEBUG, util.LoggingServiceModule)
-
 	// Creating gossip service instances for peers
 	n := 10
 	gossips := startPeers(t, n, 20000)
@@ -612,11 +608,12 @@ func newGossipInstance(portPrefix int, id int, maxMsgCount int, boot ...int) Gos
 		PublishStateInfoInterval:   time.Duration(1) * time.Second,
 		RequestStateInfoInterval:   time.Duration(1) * time.Second,
 	}
+	selfId := api.PeerIdentityType(conf.InternalEndpoint)
 	cryptoService := &naiveCryptoService{}
-	idMapper := identity.NewIdentityMapper(cryptoService)
+	idMapper := identity.NewIdentityMapper(cryptoService, selfId)
 
 	gossip := gossip.NewGossipServiceWithServer(conf, &orgCryptoService{}, cryptoService,
-		idMapper, api.PeerIdentityType(conf.InternalEndpoint), nil)
+		idMapper, selfId, nil)
 
 	gossipService := &gossipServiceImpl{
 		gossipSvc:       gossip,

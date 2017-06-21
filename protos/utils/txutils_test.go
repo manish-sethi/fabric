@@ -1,17 +1,7 @@
 /*
 Copyright IBM Corp. 2017 All Rights Reserved.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-		 http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+SPDX-License-Identifier: Apache-2.0
 */
 
 package utils_test
@@ -23,6 +13,7 @@ import (
 
 	"github.com/golang/protobuf/proto"
 	mockmsp "github.com/hyperledger/fabric/common/mocks/msp"
+	"github.com/hyperledger/fabric/common/util"
 	cb "github.com/hyperledger/fabric/protos/common"
 	pb "github.com/hyperledger/fabric/protos/peer"
 	"github.com/hyperledger/fabric/protos/utils"
@@ -217,7 +208,7 @@ func TestCreateSignedTx(t *testing.T) {
 
 	//
 	//
-	// addtional failure cases
+	// additional failure cases
 	prop = &pb.Proposal{}
 	responses = []*pb.ProposalResponse{}
 	// no proposal responses
@@ -263,6 +254,25 @@ func TestCreateSignedEnvelope(t *testing.T) {
 	_, err = utils.CreateSignedEnvelope(cb.HeaderType_CONFIG, channelID,
 		badSigner, &cb.ConfigEnvelope{}, int32(1), uint64(1))
 	assert.Error(t, err, "Expected sign error")
+}
+
+func TestCreateSignedEnvelopeNilSigner(t *testing.T) {
+	var env *cb.Envelope
+	channelID := "mychannelID"
+	msg := &cb.ConfigEnvelope{}
+
+	env, err := utils.CreateSignedEnvelope(cb.HeaderType_CONFIG, channelID,
+		nil, msg, int32(1), uint64(1))
+	assert.NoError(t, err, "Unexpected error creating signed envelope")
+	assert.NotNil(t, env, "Envelope should not be nil")
+	assert.Empty(t, env.Signature, "Signature should have been empty")
+	payload := &cb.Payload{}
+	err = proto.Unmarshal(env.Payload, payload)
+	assert.NoError(t, err, "Failed to unmarshal payload")
+	data := &cb.ConfigEnvelope{}
+	err = proto.Unmarshal(payload.Data, data)
+	assert.NoError(t, err, "Expected payload data to be a config envelope")
+	assert.Equal(t, msg, data, "Payload data does not match expected value")
 }
 
 func TestGetSignedProposal(t *testing.T) {
@@ -424,6 +434,35 @@ func TestGetProposalHash1(t *testing.T) {
 	propHash, err = utils.GetProposalHash1(&cb.Header{},
 		[]byte("ccproppayload"), []byte{})
 	assert.Error(t, err, "Expected error with nil arguments")
+}
+
+func TestCreateProposalResponseFailure(t *testing.T) {
+	// create a proposal from a ChaincodeInvocationSpec
+	prop, _, err := utils.CreateChaincodeProposal(cb.HeaderType_ENDORSER_TRANSACTION, util.GetTestChainID(), createCIS(), signerSerialized)
+	if err != nil {
+		t.Fatalf("Could not create chaincode proposal, err %s\n", err)
+		return
+	}
+
+	response := &pb.Response{Status: 502, Payload: []byte("Invalid function name")}
+	result := []byte("res")
+	ccid := &pb.ChaincodeID{Name: "foo", Version: "v1"}
+
+	prespFailure, err := utils.CreateProposalResponseFailure(prop.Header, prop.Payload, response, result, nil, ccid, nil)
+	if err != nil {
+		t.Fatalf("Could not create proposal response failure, err %s\n", err)
+		return
+	}
+
+	assert.Equal(t, int32(500), prespFailure.Response.Status)
+	// drilldown into the response to find the chaincode response
+	pRespPayload, err := utils.GetProposalResponsePayload(prespFailure.Payload)
+	assert.NoError(t, err, "Error while unmarshaling proposal response payload: %s", err)
+	ca, err := utils.GetChaincodeAction(pRespPayload.Extension)
+	assert.NoError(t, err, "Error while unmarshaling chaincode action: %s", err)
+
+	assert.Equal(t, int32(502), ca.Response.Status)
+	assert.Equal(t, "Invalid function name", string(ca.Response.Payload))
 }
 
 // mock

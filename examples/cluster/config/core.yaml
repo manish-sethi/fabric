@@ -85,7 +85,6 @@ peer:
 
     # Setting for runtime.GOMAXPROCS(n). If n < 1, it does not change the current setting
     gomaxprocs: -1
-    workers: 2
 
     # Gossip related configuration
     gossip:
@@ -156,9 +155,6 @@ peer:
         # This is an endpoint that is published to peers outside of the organization.
         # If this isn't set, the peer will not be known to other organizations.
         externalEndpoint:
-        # Makes gossip skip verification of remote peer signature when performing
-        # the authentication handshake with remote peers
-        skipHandshake: true
 
         # Leader election service configuration
         election:
@@ -240,7 +236,7 @@ peer:
             # SHA2 is hardcoded in several places, not only BCCSP
             Hash: SHA2
             Security: 256
-            # Location of Key Store, can be subdirectory of SbftLocal.DataDir
+            # Location of Key Store
             FileKeyStore:
                 # If "", defaults to 'mspConfigPath'/keystore
                 # TODO: Ensure this is read with fabric/core/config.GetPath() once ready

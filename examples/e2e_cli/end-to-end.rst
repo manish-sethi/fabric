@@ -31,7 +31,15 @@ Prerequisites
 On Windows machines you will also need the following which provides a better alternative to the Windows command prompt:
 
 - `Git Bash <https://git-scm.com/downloads>`__
-- `make for MinGW <http://sourceforge.net/projects/mingw/files/MinGW/Extension/make/make-3.82.90-cvs/make-3.82.90-2-mingw32-cvs-20120902-bin.tar.lzma>`__ to be added to Git Bash
+
+.. note:: On older versions of Windows, such as Windows 7, you
+          typically get this as part of installing Docker
+          Toolbox. However experience has shown this to be a poor
+          development environment with limited functionality. It is
+          suitable to run docker based scenarios, such as
+          :doc:`getting_started`, but you may not be able to find a
+          suitable ``make`` command to successfuly go through the
+          scenario described here.
 
 Setting the $GOPATH
 ^^^^^^^^^^^^^^^^^^^
@@ -65,24 +73,8 @@ or though a mirrored repository in github:
         brew install gnu-tar --with-default-names
         brew install libtool
 
-Pick a commit level
-^^^^^^^^^^^^^^^^^^^
-
-It's recommended to run the end-to-end tests against images and binaries from
-the stable "alpha2" release.
-
-From your fabric directory:
-
-.. code:: bash
-
-  git tag -l
-  git checkout v1.0.0-alpha2
-
-This reverts us back to the "alpha2" commit.  **NOTE**:  You do have the option of
-compiling images and binaries from the current master branch
-(this might be desired for chaincode testing or fabric development), however
-debugging and troubleshooting responsibilities will fall upon the user.  As a
-result we recommend "alpha2".
+Build the binaries
+^^^^^^^^^^^^^^^^^^
 
 -  Now make the platform-specific binaries for ``cryptogen`` and ``configtxgen``.
 
@@ -90,7 +82,7 @@ result we recommend "alpha2".
 
        cd $GOPATH/src/github.com/hyperledger/fabric
        # ensure sure you are in the /fabric directory where the Makefile resides
-       make release-all
+       make release
 
 This will output platform-specific binaries into the ``fabric/release`` folder.
 
@@ -109,23 +101,23 @@ successfully, you should see an output similar to the following:
 
   REPOSITORY                     TAG                   IMAGE ID            CREATED             SIZE
   hyperledger/fabric-couchdb     latest                e2df4dd39ca9        38 minutes ago      1.51 GB
-  hyperledger/fabric-couchdb     x86_64-1.0.0-alpha2   e2df4dd39ca9        38 minutes ago      1.51 GB
+  hyperledger/fabric-couchdb     x86_64-1.0.0-beta     e2df4dd39ca9        38 minutes ago      1.51 GB
   hyperledger/fabric-kafka       latest                08af4d797266        40 minutes ago      1.3 GB
-  hyperledger/fabric-kafka       x86_64-1.0.0-alpha2   08af4d797266        40 minutes ago      1.3 GB
+  hyperledger/fabric-kafka       x86_64-1.0.0-beta     08af4d797266        40 minutes ago      1.3 GB
   hyperledger/fabric-zookeeper   latest                444e9e695367        40 minutes ago      1.31 GB
-  hyperledger/fabric-zookeeper   x86_64-1.0.0-alpha2   444e9e695367        40 minutes ago      1.31 GB
+  hyperledger/fabric-zookeeper   x86_64-1.0.0-beta     444e9e695367        40 minutes ago      1.31 GB
   hyperledger/fabric-testenv     latest                8678d3101930        41 minutes ago      1.41 GB
-  hyperledger/fabric-testenv     x86_64-1.0.0-alpha2   8678d3101930        41 minutes ago      1.41 GB
+  hyperledger/fabric-testenv     x86_64-1.0.0-beta     8678d3101930        41 minutes ago      1.41 GB
   hyperledger/fabric-buildenv    latest                60911392c82e        41 minutes ago      1.33 GB
-  hyperledger/fabric-buildenv    x86_64-1.0.0-alpha2   60911392c82e        41 minutes ago      1.33 GB
+  hyperledger/fabric-buildenv    x86_64-1.0.0-beta     60911392c82e        41 minutes ago      1.33 GB
   hyperledger/fabric-orderer     latest                2afab937b9cc        41 minutes ago      182 MB
-  hyperledger/fabric-orderer     x86_64-1.0.0-alpha2   2afab937b9cc        41 minutes ago      182 MB
+  hyperledger/fabric-orderer     x86_64-1.0.0-beta     2afab937b9cc        41 minutes ago      182 MB
   hyperledger/fabric-peer        latest                9560e58e8089        41 minutes ago      185 MB
-  hyperledger/fabric-peer        x86_64-1.0.0-alpha2   9560e58e8089        41 minutes ago      185 MB
+  hyperledger/fabric-peer        x86_64-1.0.0-beta     9560e58e8089        41 minutes ago      185 MB
   hyperledger/fabric-javaenv     latest                881ca5219fad        42 minutes ago      1.43 GB
-  hyperledger/fabric-javaenv     x86_64-1.0.0-alpha2   881ca5219fad        42 minutes ago      1.43 GB
+  hyperledger/fabric-javaenv     x86_64-1.0.0-beta     881ca5219fad        42 minutes ago      1.43 GB
   hyperledger/fabric-ccenv       latest                28af77ffe9e9        43 minutes ago      1.29 GB
-  hyperledger/fabric-ccenv       x86_64-1.0.0-alpha2   28af77ffe9e9        43 minutes ago      1.29 GB
+  hyperledger/fabric-ccenv       x86_64-1.0.0-beta     28af77ffe9e9        43 minutes ago      1.29 GB
   hyperledger/fabric-baseimage   x86_64-0.3.0          f4751a503f02        3 months ago        1.27 GB
   hyperledger/fabric-baseos      x86_64-0.3.0          c3a4cf3b3350        3 months ago        161 MB
 
@@ -893,7 +885,7 @@ again.
       Error: rpc error: code = 14 desc = grpc: RPC failed fast due to transport failure
 
 Make sure you pointed to the correct binaries in the release folder when
-generating the artifacts, and that your backend is running against "alpha2" images
+generating the artifacts, and that your backend is running against "beta" images
 or compiled images from the current master branch.
 
 If you see the below error:
@@ -915,3 +907,7 @@ back and recreate your channel artifacts.
 
 - If you continue to see errors, share your logs on the **# fabric-questions**
   channel on `Hyperledger Rocket Chat <https://chat.hyperledger.org/home>`__.
+
+.. Licensed under Creative Commons Attribution 4.0 International License
+   https://creativecommons.org/licenses/by/4.0/
+   

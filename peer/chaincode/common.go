@@ -26,6 +26,7 @@ import (
 	"github.com/hyperledger/fabric/common/cauthdsl"
 	"github.com/hyperledger/fabric/core/chaincode"
 	"github.com/hyperledger/fabric/core/chaincode/platforms"
+	"github.com/hyperledger/fabric/core/chaincode/shim"
 	"github.com/hyperledger/fabric/core/container"
 	"github.com/hyperledger/fabric/msp"
 	"github.com/hyperledger/fabric/peer/common"
@@ -101,13 +102,42 @@ func chaincodeInvokeOrQuery(cmd *cobra.Command, args []string, invoke bool, cf *
 		return err
 	}
 
-	proposalResp, err := ChaincodeInvokeOrQuery(spec, chainID, invoke, cf.Signer, cf.EndorserClient, cf.BroadcastClient)
+	proposalResp, err := ChaincodeInvokeOrQuery(
+		spec,
+		chainID,
+		invoke,
+		cf.Signer,
+		cf.EndorserClient,
+		cf.BroadcastClient)
+
 	if err != nil {
-		return err
+		return fmt.Errorf("%s - %v", err, proposalResp)
 	}
 
 	if invoke {
-		logger.Infof("Invoke result: %v", proposalResp)
+		if proposalResp.Response.Status >= shim.ERROR {
+			logger.Debugf("ESCC invoke result: %v", proposalResp)
+			pRespPayload, err := putils.GetProposalResponsePayload(proposalResp.Payload)
+			if err != nil {
+				return fmt.Errorf("Error while unmarshaling proposal response payload: %s", err)
+			}
+			ca, err := putils.GetChaincodeAction(pRespPayload.Extension)
+			if err != nil {
+				return fmt.Errorf("Error while unmarshaling chaincode action: %s", err)
+			}
+			logger.Warningf("Endorsement failure during invoke. chaincode result: %v", ca.Response)
+		} else {
+			logger.Debugf("ESCC invoke result: %v", proposalResp)
+			pRespPayload, err := putils.GetProposalResponsePayload(proposalResp.Payload)
+			if err != nil {
+				return fmt.Errorf("Error while unmarshaling proposal response payload: %s", err)
+			}
+			ca, err := putils.GetChaincodeAction(pRespPayload.Extension)
+			if err != nil {
+				return fmt.Errorf("Error while unmarshaling chaincode action: %s", err)
+			}
+			logger.Infof("Chaincode invoke successful. result: %v", ca.Response)
+		}
 	} else {
 		if proposalResp == nil {
 			return fmt.Errorf("Error query %s by endorsing: %s", chainFuncName, err)
@@ -115,8 +145,7 @@ func chaincodeInvokeOrQuery(cmd *cobra.Command, args []string, invoke bool, cf *
 
 		if chaincodeQueryRaw {
 			if chaincodeQueryHex {
-				err = errors.New("Options --raw (-r) and --hex (-x) are not compatible")
-				return
+				return fmt.Errorf("Options --raw (-r) and --hex (-x) are not compatible")
 			}
 			fmt.Print("Query Result (Raw): ")
 			os.Stdout.Write(proposalResp.Response.Payload)
@@ -128,7 +157,7 @@ func chaincodeInvokeOrQuery(cmd *cobra.Command, args []string, invoke bool, cf *
 			}
 		}
 	}
-	return err
+	return nil
 }
 
 func checkChaincodeCmdParams(cmd *cobra.Command) error {
@@ -137,47 +166,33 @@ func checkChaincodeCmdParams(cmd *cobra.Command) error {
 		return fmt.Errorf("Must supply value for %s name parameter.", chainFuncName)
 	}
 
-	if cmd.Name() == instantiate_cmdname || cmd.Name() == install_cmdname || cmd.Name() == upgrade_cmdname || cmd.Name() == package_cmdname {
+	if cmd.Name() == instantiateCmdName || cmd.Name() == installCmdName ||
+		cmd.Name() == upgradeCmdName || cmd.Name() == packageCmdName {
 		if chaincodeVersion == common.UndefinedParamValue {
 			return fmt.Errorf("Chaincode version is not provided for %s", cmd.Name())
 		}
 	}
 
-	// if it's not a deploy or an upgrade we don't need policy, escc and vscc
-	if cmd.Name() != instantiate_cmdname && cmd.Name() != upgrade_cmdname {
-		if escc != common.UndefinedParamValue {
-			return errors.New("escc should be supplied only to chaincode deploy requests")
-		}
-
-		if vscc != common.UndefinedParamValue {
-			return errors.New("vscc should be supplied only to chaincode deploy requests")
-		}
-
-		if policy != common.UndefinedParamValue {
-			return errors.New("policy should be supplied only to chaincode deploy requests")
-		}
+	if escc != common.UndefinedParamValue {
+		logger.Infof("Using escc %s", escc)
 	} else {
-		if escc != common.UndefinedParamValue {
-			logger.Infof("Using escc %s", escc)
-		} else {
-			logger.Info("Using default escc")
-			escc = "escc"
-		}
+		logger.Info("Using default escc")
+		escc = "escc"
+	}
 
-		if vscc != common.UndefinedParamValue {
-			logger.Infof("Using vscc %s", vscc)
-		} else {
-			logger.Info("Using default vscc")
-			vscc = "vscc"
-		}
+	if vscc != common.UndefinedParamValue {
+		logger.Infof("Using vscc %s", vscc)
+	} else {
+		logger.Info("Using default vscc")
+		vscc = "vscc"
+	}
 
-		if policy != common.UndefinedParamValue {
-			p, err := cauthdsl.FromString(policy)
-			if err != nil {
-				return fmt.Errorf("Invalid policy %s", policy)
-			}
-			policyMarhsalled = putils.MarshalOrPanic(p)
+	if policy != common.UndefinedParamValue {
+		p, err := cauthdsl.FromString(policy)
+		if err != nil {
+			return fmt.Errorf("Invalid policy %s", policy)
 		}
+		policyMarhsalled = putils.MarshalOrPanic(p)
 	}
 
 	// Check that non-empty chaincode parameters contain only Args as a key.
@@ -222,13 +237,13 @@ func InitCmdFactory(isEndorserRequired, isOrdererRequired bool) (*ChaincodeCmdFa
 	var err error
 	var endorserClient pb.EndorserClient
 	if isEndorserRequired {
-		endorserClient, err = common.GetEndorserClient()
+		endorserClient, err = common.GetEndorserClientFnc()
 		if err != nil {
 			return nil, fmt.Errorf("Error getting endorser client %s: %s", chainFuncName, err)
 		}
 	}
 
-	signer, err := common.GetDefaultSigner()
+	signer, err := common.GetDefaultSignerFnc()
 	if err != nil {
 		return nil, fmt.Errorf("Error getting default signer: %s", err)
 	}
@@ -236,7 +251,7 @@ func InitCmdFactory(isEndorserRequired, isOrdererRequired bool) (*ChaincodeCmdFa
 	var broadcastClient common.BroadcastClient
 	if isOrdererRequired {
 		if len(orderingEndpoint) == 0 {
-			orderingEndpoints, err := common.GetOrdererEndpointOfChain(chainID, signer, endorserClient)
+			orderingEndpoints, err := common.GetOrdererEndpointOfChainFnc(chainID, signer, endorserClient)
 			if err != nil {
 				return nil, fmt.Errorf("Error getting (%s) orderer endpoint: %s", chainID, err)
 			}
@@ -247,7 +262,7 @@ func InitCmdFactory(isEndorserRequired, isOrdererRequired bool) (*ChaincodeCmdFa
 			orderingEndpoint = orderingEndpoints[0]
 		}
 
-		broadcastClient, err = common.GetBroadcastClient(orderingEndpoint, tls, caFile)
+		broadcastClient, err = common.GetBroadcastClientFnc(orderingEndpoint, tls, caFile)
 
 		if err != nil {
 			return nil, fmt.Errorf("Error getting broadcast client: %s", err)
@@ -269,7 +284,14 @@ func InitCmdFactory(isEndorserRequired, isOrdererRequired bool) (*ChaincodeCmdFa
 //
 // NOTE - Query will likely go away as all interactions with the endorser are
 // Proposal and ProposalResponses
-func ChaincodeInvokeOrQuery(spec *pb.ChaincodeSpec, cID string, invoke bool, signer msp.SigningIdentity, endorserClient pb.EndorserClient, bc common.BroadcastClient) (*pb.ProposalResponse, error) {
+func ChaincodeInvokeOrQuery(
+	spec *pb.ChaincodeSpec,
+	cID string,
+	invoke bool,
+	signer msp.SigningIdentity,
+	endorserClient pb.EndorserClient,
+	bc common.BroadcastClient,
+) (*pb.ProposalResponse, error) {
 	// Build the ChaincodeInvocationSpec message
 	invocation := &pb.ChaincodeInvocationSpec{ChaincodeSpec: spec}
 	if customIDGenAlg != common.UndefinedParamValue {
@@ -306,6 +328,9 @@ func ChaincodeInvokeOrQuery(spec *pb.ChaincodeSpec, cID string, invoke bool, sig
 
 	if invoke {
 		if proposalResp != nil {
+			if proposalResp.Response.Status >= shim.ERROR {
+				return proposalResp, nil
+			}
 			// assemble a signed transaction (it's an Envelope message)
 			env, err := putils.CreateSignedTx(prop, signer, proposalResp)
 			if err != nil {

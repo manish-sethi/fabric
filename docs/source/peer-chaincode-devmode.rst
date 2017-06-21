@@ -18,17 +18,19 @@ Start the orderer
 
 ::
 
-    orderer
+    ORDERER_GENERAL_GENESISPROFILE=SampleDevModeSolo orderer
 
-The above starts the orderer in the local environment using default
-orderer configuration as defined in ``sampleconfig/orderer.yaml``.
+The above starts the orderer in the local environment the orderer
+configuration as defined in ``sampleconfig/orderer.yaml`` with the
+genesisprofile directive overridden to use the SampleDevModeSolo profile
+for bootstrapping the network.
 
 Start the peer in dev mode
 --------------------------
 
 ::
 
-    peer node start --peer-defaultchain=false --peer-chaincodedev=true
+    peer node start --peer-chaincodedev=true
 
 The above command starts the peer using the default ``sampleconfig/msp``
 MSP. The ``--peer-chaincodedev=true`` puts it in “dev” mode.
@@ -77,13 +79,13 @@ Use the chaincode
 
 Even though you are in ``--peer-chaincodedev`` mode, you still have to install the chaincode so the life-cycle system
 chaincode can go through its checks normally. This requirement may be removed in future when in ``--peer-chaincodedev``
-mode. 
+mode.
 
 ::
 
     peer chaincode install -n mycc -v 0 -p github.com/hyperledger/fabric/examples/chaincode/go/chaincode_example02
 
-Once installed, the chaincode is ready to be instantiated. 
+Once installed, the chaincode is ready to be instantiated.
 
 ::
 
@@ -108,3 +110,7 @@ Finally, query the chaincode on the two channels.
 
     peer chaincode query -n mycc -c '{"Args":["query","a"]}' -o 127.0.0.1:7050 -C ch1
     peer chaincode query -n mycc -c '{"Args":["query","a"]}' -o 127.0.0.1:7050 -C ch2
+
+.. Licensed under Creative Commons Attribution 4.0 International License
+   https://creativecommons.org/licenses/by/4.0/
+

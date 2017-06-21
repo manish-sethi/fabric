@@ -1,17 +1,7 @@
 /*
 Copyright IBM Corp. 2016 All Rights Reserved.
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-		 http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+SPDX-License-Identifier: Apache-2.0
 */
 
 package endorser
@@ -24,8 +14,6 @@ import (
 	"golang.org/x/net/context"
 
 	"errors"
-
-	"bytes"
 
 	"github.com/hyperledger/fabric/common/policies"
 	"github.com/hyperledger/fabric/common/util"
@@ -43,6 +31,19 @@ import (
 	pb "github.com/hyperledger/fabric/protos/peer"
 	putils "github.com/hyperledger/fabric/protos/utils"
 )
+
+// >>>>> begin errors section >>>>>
+//chaincodeError is a fabric error signifying error from chaincode
+type chaincodeError struct {
+	status int32
+	msg    string
+}
+
+func (ce chaincodeError) Error() string {
+	return fmt.Sprintf("chaincode error (status: %d, message: %s)", ce.status, ce.msg)
+}
+
+// <<<<< end errors section <<<<<<
 
 var endorserLogger = flogging.MustGetLogger("endorser")
 
@@ -80,7 +81,7 @@ func (*Endorser) checkEsccAndVscc(prop *pb.Proposal) error {
 func (*Endorser) getTxSimulator(ledgername string) (ledger.TxSimulator, error) {
 	lgr := peer.GetLedger(ledgername)
 	if lgr == nil {
-		return nil, fmt.Errorf("chain does not exist(%s)", ledgername)
+		return nil, fmt.Errorf("channel does not exist: %s", ledgername)
 	}
 	return lgr.NewTxSimulator()
 }
@@ -88,13 +89,15 @@ func (*Endorser) getTxSimulator(ledgername string) (ledger.TxSimulator, error) {
 func (*Endorser) getHistoryQueryExecutor(ledgername string) (ledger.HistoryQueryExecutor, error) {
 	lgr := peer.GetLedger(ledgername)
 	if lgr == nil {
-		return nil, fmt.Errorf("chain does not exist(%s)", ledgername)
+		return nil, fmt.Errorf("channel does not exist: %s", ledgername)
 	}
 	return lgr.NewHistoryQueryExecutor()
 }
 
 //call specified chaincode (system or user)
 func (e *Endorser) callChaincode(ctxt context.Context, chainID string, version string, txid string, signedProp *pb.SignedProposal, prop *pb.Proposal, cis *pb.ChaincodeInvocationSpec, cid *pb.ChaincodeID, txsim ledger.TxSimulator) (*pb.Response, *pb.ChaincodeEvent, error) {
+	endorserLogger.Debugf("Entry - txid: %s channel id: %s version: %s", txid, chainID, version)
+	defer endorserLogger.Debugf("Exit")
 	var err error
 	var res *pb.Response
 	var ccevent *pb.ChaincodeEvent
@@ -114,12 +117,11 @@ func (e *Endorser) callChaincode(ctxt context.Context, chainID string, version s
 		return nil, nil, err
 	}
 
-	//per doc anything < 500 can be sent as TX.
-	//fabric errors will always be >= 500 (ie, unambiguous errors )
-	//"lscc" will respond with status 200 or >=500 (ie, unambiguous OK or ERROR)
-	//This leaves all < 500 errors to user chaincodes
-	if res.Status >= shim.ERROR {
-		return nil, nil, fmt.Errorf(string(res.Message))
+	//per doc anything < 400 can be sent as TX.
+	//fabric errors will always be >= 400 (ie, unambiguous errors )
+	//"lscc" will respond with status 200 or 500 (ie, unambiguous OK or ERROR)
+	if res.Status >= shim.ERRORTHRESHOLD {
+		return res, nil, nil
 	}
 
 	//----- BEGIN -  SECTION THAT MAY NEED TO BE DONE IN LSCC ------
@@ -200,6 +202,8 @@ func (e *Endorser) disableJavaCCInst(cid *pb.ChaincodeID, cis *pb.ChaincodeInvoc
 
 //simulate the proposal by calling the chaincode
 func (e *Endorser) simulateProposal(ctx context.Context, chainID string, txid string, signedProp *pb.SignedProposal, prop *pb.Proposal, cid *pb.ChaincodeID, txsim ledger.TxSimulator) (*ccprovider.ChaincodeData, *pb.Response, []byte, *pb.ChaincodeEvent, error) {
+	endorserLogger.Debugf("Entry - txid: %s channel id: %s", txid, chainID)
+	defer endorserLogger.Debugf("Exit")
 	//we do expect the payload to be a ChaincodeInvocationSpec
 	//if we are supporting other payloads in future, this be glaringly point
 	//as something that should change
@@ -224,34 +228,13 @@ func (e *Endorser) simulateProposal(ctx context.Context, chainID string, txid st
 	if !syscc.IsSysCC(cid.Name) {
 		cdLedger, err = e.getCDSFromLSCC(ctx, chainID, txid, signedProp, prop, cid.Name, txsim)
 		if err != nil {
-			return nil, nil, nil, nil, fmt.Errorf("failed to obtain cds for %s - %s", cid.Name, err)
+			return nil, nil, nil, nil, fmt.Errorf("%s - make sure the chaincode %s has been successfully instantiated and try again", err, cid.Name)
 		}
 		version = cdLedger.Version
 
-		// we retrieve info about this chaincode from the file system
-		ccpack, err := ccprovider.GetChaincodeFromFS(cid.Name, version)
+		err = ccprovider.CheckInsantiationPolicy(cid.Name, version, cdLedger)
 		if err != nil {
-			return nil, nil, nil, nil, fmt.Errorf("Chaincode data for cc %s/%s was not found, error %s", cid.Name, version, err)
-		}
-		// ccpack is guaranteed to be non-nil
-		cdLocalFS := ccpack.GetChaincodeData()
-
-		// we have the info from the fs, check that the policy
-		// matches the one on the file system if one was specified;
-		// this check is required because the admin of this peer
-		// might have specified instantiation policies for their
-		// chaincode, for example to make sure that the chaincode
-		// is only instantiated on certain channels; a malicious
-		// peer on the other hand might have created a deploy
-		// transaction that attempts to bypass the instantiation
-		// policy. This check is there to ensure that this will not
-		// happen, i.e. that the peer will refuse to invoke the
-		// chaincode under these conditions. More info on
-		// https://jira.hyperledger.org/browse/FAB-3156
-		if cdLocalFS.InstantiationPolicy != nil {
-			if !bytes.Equal(cdLocalFS.InstantiationPolicy, cdLedger.InstantiationPolicy) {
-				return nil, nil, nil, nil, fmt.Errorf("Instantiation policy mismatch for cc %s/%s", cid.Name, version)
-			}
+			return nil, nil, nil, nil, err
 		}
 	} else {
 		version = util.GetSysCCVersion()
@@ -263,6 +246,7 @@ func (e *Endorser) simulateProposal(ctx context.Context, chainID string, txid st
 	var ccevent *pb.ChaincodeEvent
 	res, ccevent, err = e.callChaincode(ctx, chainID, version, txid, signedProp, prop, cis, cid, txsim)
 	if err != nil {
+		endorserLogger.Errorf("failed to invoke chaincode %s on transaction %s, error: %s", cid, txid, err)
 		return nil, nil, nil, nil, err
 	}
 
@@ -286,7 +270,8 @@ func (e *Endorser) getCDSFromLSCC(ctx context.Context, chainID string, txid stri
 
 //endorse the proposal by calling the ESCC
 func (e *Endorser) endorseProposal(ctx context.Context, chainID string, txid string, signedProp *pb.SignedProposal, proposal *pb.Proposal, response *pb.Response, simRes []byte, event *pb.ChaincodeEvent, visibility []byte, ccid *pb.ChaincodeID, txsim ledger.TxSimulator, cd *ccprovider.ChaincodeData) (*pb.ProposalResponse, error) {
-	endorserLogger.Debugf("endorseProposal starts for chainID %s, ccid %s", chainID, ccid)
+	endorserLogger.Debugf("Entry - txid: %s channel id: %s chaincode id: %s", txid, chainID, ccid)
+	defer endorserLogger.Debugf("Exit")
 
 	isSysCC := cd == nil
 	// 1) extract the name of the escc that is requested to endorse this chaincode
@@ -303,7 +288,7 @@ func (e *Endorser) endorseProposal(ctx context.Context, chainID string, txid str
 		}
 	}
 
-	endorserLogger.Debugf("endorseProposal info: escc for cid %s is %s", ccid, escc)
+	endorserLogger.Debugf("info: escc for chaincode id %s is %s", ccid, escc)
 
 	// marshalling event bytes
 	var err error
@@ -352,8 +337,8 @@ func (e *Endorser) endorseProposal(ctx context.Context, chainID string, txid str
 		return nil, err
 	}
 
-	if res.Status >= shim.ERROR {
-		return nil, fmt.Errorf(string(res.Message))
+	if res.Status >= shim.ERRORTHRESHOLD {
+		return &pb.ProposalResponse{Response: res}, nil
 	}
 
 	prBytes := res.Payload
@@ -377,6 +362,8 @@ func (e *Endorser) endorseProposal(ctx context.Context, chainID string, txid str
 
 // ProcessProposal process the Proposal
 func (e *Endorser) ProcessProposal(ctx context.Context, signedProp *pb.SignedProposal) (*pb.ProposalResponse, error) {
+	endorserLogger.Debugf("Entry")
+	defer endorserLogger.Debugf("Exit")
 	// at first, we check whether the message is valid
 	prop, hdr, hdrExt, err := validation.ValidateProposalMessage(signedProp)
 	if err != nil {
@@ -395,7 +382,7 @@ func (e *Endorser) ProcessProposal(ctx context.Context, signedProp *pb.SignedPro
 
 	// block invocations to security-sensitive system chaincodes
 	if syscc.IsSysCCAndNotInvokableExternal(hdrExt.ChaincodeId.Name) {
-		endorserLogger.Errorf("ProcessProposal error: an attempt was made by %#v to invoke system chaincode %s",
+		endorserLogger.Errorf("Error: an attempt was made by %#v to invoke system chaincode %s",
 			shdr.Creator, hdrExt.ChaincodeId.Name)
 		err = fmt.Errorf("Chaincode %s cannot be invoked through a proposal", hdrExt.ChaincodeId.Name)
 		return &pb.ProposalResponse{Response: &pb.Response{Status: 500, Message: err.Error()}}, err
@@ -411,12 +398,12 @@ func (e *Endorser) ProcessProposal(ctx context.Context, signedProp *pb.SignedPro
 		err = errors.New("Invalid txID. It must be different from the empty string.")
 		return &pb.ProposalResponse{Response: &pb.Response{Status: 500, Message: err.Error()}}, err
 	}
-
+	endorserLogger.Debugf("processing txid: %s", txid)
 	if chainID != "" {
 		// here we handle uniqueness check and ACLs for proposals targeting a chain
 		lgr := peer.GetLedger(chainID)
 		if lgr == nil {
-			return nil, errors.New(fmt.Sprintf("Failure while looking up the ledger %s", chainID))
+			return nil, fmt.Errorf("failure while looking up the ledger %s", chainID)
 		}
 		if _, err := lgr.GetTransactionByID(txid); err == nil {
 			return nil, fmt.Errorf("Duplicate transaction found [%s]. Creator [%x]. [%s]", txid, shdr.Creator, err)
@@ -468,6 +455,24 @@ func (e *Endorser) ProcessProposal(ctx context.Context, signedProp *pb.SignedPro
 	if err != nil {
 		return &pb.ProposalResponse{Response: &pb.Response{Status: 500, Message: err.Error()}}, err
 	}
+	if res != nil {
+		if res.Status >= shim.ERROR {
+			endorserLogger.Errorf("simulateProposal() resulted in chaincode response status %d for txid: %s", res.Status, txid)
+			var cceventBytes []byte
+			if ccevent != nil {
+				cceventBytes, err = putils.GetBytesChaincodeEvent(ccevent)
+				if err != nil {
+					return nil, fmt.Errorf("failed to marshal event bytes - %s", err)
+				}
+			}
+			pResp, err := putils.CreateProposalResponseFailure(prop.Header, prop.Payload, res, simulationResult, cceventBytes, hdrExt.ChaincodeId, hdrExt.PayloadVisibility)
+			if err != nil {
+				return &pb.ProposalResponse{Response: &pb.Response{Status: 500, Message: err.Error()}}, err
+			}
+
+			return pResp, &chaincodeError{res.Status, res.Message}
+		}
+	}
 
 	//2 -- endorse and get a marshalled ProposalResponse message
 	var pResp *pb.ProposalResponse
@@ -480,6 +485,12 @@ func (e *Endorser) ProcessProposal(ctx context.Context, signedProp *pb.SignedPro
 		pResp, err = e.endorseProposal(ctx, chainID, txid, signedProp, prop, res, simulationResult, ccevent, hdrExt.PayloadVisibility, hdrExt.ChaincodeId, txsim, cd)
 		if err != nil {
 			return &pb.ProposalResponse{Response: &pb.Response{Status: 500, Message: err.Error()}}, err
+		}
+		if pResp != nil {
+			if res.Status >= shim.ERRORTHRESHOLD {
+				endorserLogger.Debugf("endorseProposal() resulted in chaincode error for txid: %s", txid)
+				return pResp, &chaincodeError{res.Status, res.Message}
+			}
 		}
 	}
 
