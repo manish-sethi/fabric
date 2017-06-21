@@ -165,8 +165,6 @@ func (m *KVRead) Reset()                    { *m = KVRead{} }
 func (m *KVRead) String() string            { return proto.CompactTextString(m) }
 func (*KVRead) ProtoMessage()               {}
 func (*KVRead) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{4} }
-<<<<<<< HEAD
-=======
 
 func (m *KVRead) GetKey() string {
 	if m != nil {
@@ -174,7 +172,6 @@ func (m *KVRead) GetKey() string {
 	}
 	return ""
 }
->>>>>>> sidedb-dev-1
 
 func (m *KVRead) GetVersion() *Version {
 	if m != nil {
@@ -194,8 +191,6 @@ func (m *KVWrite) Reset()                    { *m = KVWrite{} }
 func (m *KVWrite) String() string            { return proto.CompactTextString(m) }
 func (*KVWrite) ProtoMessage()               {}
 func (*KVWrite) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{5} }
-<<<<<<< HEAD
-=======
 
 func (m *KVWrite) GetKey() string {
 	if m != nil {
@@ -217,7 +212,6 @@ func (m *KVWrite) GetValue() []byte {
 	}
 	return nil
 }
->>>>>>> sidedb-dev-1
 
 // Version encapsulates the version of a Key
 // A version of a committed key is maintained as the height of the transaction that committed the key.
@@ -232,8 +226,6 @@ func (m *Version) Reset()                    { *m = Version{} }
 func (m *Version) String() string            { return proto.CompactTextString(m) }
 func (*Version) ProtoMessage()               {}
 func (*Version) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{6} }
-<<<<<<< HEAD
-=======
 
 func (m *Version) GetBlockNum() uint64 {
 	if m != nil {
@@ -248,7 +240,6 @@ func (m *Version) GetTxNum() uint64 {
 	}
 	return 0
 }
->>>>>>> sidedb-dev-1
 
 // RangeQueryInfo encapsulates the details of a range query performed by a transaction during simulation.
 // This helps protect transactions from phantom reads by varifying during validation whether any new items
@@ -433,8 +424,6 @@ func (m *QueryReadsMerkleSummary) Reset()                    { *m = QueryReadsMe
 func (m *QueryReadsMerkleSummary) String() string            { return proto.CompactTextString(m) }
 func (*QueryReadsMerkleSummary) ProtoMessage()               {}
 func (*QueryReadsMerkleSummary) Descriptor() ([]byte, []int) { return fileDescriptor0, []int{9} }
-<<<<<<< HEAD
-=======
 
 func (m *QueryReadsMerkleSummary) GetMaxDegree() uint32 {
 	if m != nil {
@@ -456,7 +445,6 @@ func (m *QueryReadsMerkleSummary) GetMaxLevelHashes() [][]byte {
 	}
 	return nil
 }
->>>>>>> sidedb-dev-1
 
 func init() {
 	proto.RegisterType((*KVRWSet)(nil), "kvrwset.KVRWSet")
