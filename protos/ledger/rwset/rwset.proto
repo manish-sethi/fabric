@@ -35,5 +35,6 @@ message TxReadWriteSet {
 // NsReadWriteSet encapsulates the read-write set for a chaincode
 message NsReadWriteSet {
    string namespace = 1;
-   bytes rwset = 2; // Data model specific serialized proto message (e.g., kvrwset.KVRWSet for KV and Document data models)
+   bytes rwset = 2; // Data model specific serialized proto message (e.g., kvrwset.KVRWSet for KV and Document data models)       
+   bytes private_readwriteset_hash = 3; // Hash of read-write set for private data. This helps in authenticating the private read-write set efficient
 }
