@@ -19,6 +19,13 @@ package util
 import (
 	"reflect"
 	"sort"
+
+	"github.com/hyperledger/fabric/bccsp"
+	bccspfactory "github.com/hyperledger/fabric/bccsp/factory"
+)
+
+var (
+	hashOpts = &bccsp.SHA256Opts{}
 )
 
 // GetSortedKeys returns the keys of the map in a sorted order. This function assumes that the keys are string
@@ -75,4 +82,14 @@ func (keys keys) Swap(i, j int) {
 
 func (keys keys) Less(i, j int) bool {
 	return keys[i].str < keys[j].str
+}
+
+// ComputeStringHash computes the hash of the given string
+func ComputeStringHash(input string) ([]byte, error) {
+	return ComputeHash([]byte(input))
+}
+
+// ComputeHash computes the hash of the given bytes
+func ComputeHash(input []byte) ([]byte, error) {
+	return bccspfactory.GetDefault().Hash([]byte(input), hashOpts)
 }

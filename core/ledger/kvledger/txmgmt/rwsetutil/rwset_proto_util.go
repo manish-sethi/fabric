@@ -18,8 +18,8 @@ package rwsetutil
 
 import (
 	"github.com/golang/protobuf/proto"
-	bccspfactory "github.com/hyperledger/fabric/bccsp/factory"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/version"
+	"github.com/hyperledger/fabric/core/ledger/util"
 	"github.com/hyperledger/fabric/protos/ledger/rwset"
 	"github.com/hyperledger/fabric/protos/ledger/rwset/kvrwset"
 )
@@ -279,7 +279,7 @@ func newKVWrite(key string, value []byte) *kvrwset.KVWrite {
 }
 
 func newPvtKVReadHash(key string, version *version.Height) (*kvrwset.KVReadHash, error) {
-	keyHash, err := computeKeyHash(key)
+	keyHash, err := util.ComputeStringHash(key)
 	if err != nil {
 		return nil, err
 	}
@@ -290,21 +290,13 @@ func newPvtKVWriteAndHash(key string, value []byte) (*kvrwset.KVWrite, *kvrwset.
 	kvWrite := newKVWrite(key, value)
 	var keyHash, valueHash []byte
 	var err error
-	if keyHash, err = computeKeyHash(key); err != nil {
+	if keyHash, err = util.ComputeStringHash(key); err != nil {
 		return nil, nil, err
 	}
 	if !kvWrite.IsDelete {
-		if valueHash, err = computeValueHash(value); err != nil {
+		if valueHash, err = util.ComputeHash(value); err != nil {
 			return nil, nil, err
 		}
 	}
 	return kvWrite, &kvrwset.KVWriteHash{KeyHash: keyHash, IsDelete: kvWrite.IsDelete, ValueHash: valueHash}, nil
-}
-
-func computeKeyHash(input string) ([]byte, error) {
-	return computeValueHash([]byte(input))
-}
-
-func computeValueHash(input []byte) ([]byte, error) {
-	return bccspfactory.GetDefault().Hash([]byte(input), hashOpts)
 }
