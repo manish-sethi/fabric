@@ -21,40 +21,18 @@ option java_package = "org.hyperledger.fabric.protos.ledger.rwset.kvrwset";
 
 package kvrwset;
 
-// KVRWSet encapsulates two read-write set for a chaincode that operates upon a KV or
-// Document data model, and the two read-write sets are 
-// (1) the primary read-write set for public data. 
-// (2) hashsed read-write set for private data (all collections). 
+// KVRWSet encapsulates the read-write set for a chaincode that operates upon a KV or Document data model
+// This structure is used for both the public data and the private data
 message KVRWSet {
-    // Primary read-write set for public data
     repeated KVRead reads = 1;
     repeated RangeQueryInfo range_queries_info = 2;
     repeated KVWrite writes = 3;
-
-    // Hashed read-write set for private data
-    repeated HashedRWSet hashed_r_w = 4;
 }
 
-// HashedRWSet encapsulates private read-write set of a collections for a chaincode 
-// that operates upon a KV or Document data model. 
+// HashedRWSet encapsulates hashed representation of a private read-write set for KV or Document data model
 message HashedRWSet {
-    string collection = 1;
     repeated KVReadHash hashed_reads = 2;
     repeated KVWriteHash hashed_writes = 3;
-}
-
-// PrivateKVRWSet encapsulates private read-write set of all collections for a chaincode 
-// that operates upon a KV or Document data model. 
-message PrivateCollectionsKVRWSets {
-    repeated PrivateKVRWSet private_r_w_set = 1; 
-}
-
-// PrivateKVRWSet encapsulates private read-write set of a collection for a chaincode 
-// that operates upon a KV or Document data model. 
-message PrivateKVRWSet {
-    string collection = 1;
-    repeated KVRead private_reads = 2;
-    repeated KVWrite private_writes = 3;
 }
 
 // KVRead captures a read operation performed during transaction simulation
