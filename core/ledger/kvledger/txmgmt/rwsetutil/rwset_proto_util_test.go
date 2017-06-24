@@ -21,12 +21,11 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/hyperledger/fabric/common/ledger/testutil"
-	"github.com/hyperledger/fabric/common/util"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/version"
 	"github.com/hyperledger/fabric/protos/ledger/rwset/kvrwset"
 )
 
-func TestTxRWSetMarshalUnmarshalWithoutHashedRWSet(t *testing.T) {
+func TestTxRWSetMarshalUnmarshal(t *testing.T) {
 	txRwSet := &TxRwSet{}
 
 	rqi1 := &kvrwset.RangeQueryInfo{StartKey: "k0", EndKey: "k9", ItrExhausted: true}
@@ -55,91 +54,6 @@ func TestTxRWSetMarshalUnmarshalWithoutHashedRWSet(t *testing.T) {
 			Reads:            []*kvrwset.KVRead{&kvrwset.KVRead{Key: "key4", Version: &kvrwset.Version{BlockNum: 1, TxNum: 1}}},
 			RangeQueriesInfo: nil,
 			Writes:           []*kvrwset.KVWrite{&kvrwset.KVWrite{Key: "key4", IsDelete: false, Value: []byte("value4")}},
-		}},
-	}
-
-	protoBytes, err := txRwSet.ToProtoBytes()
-	testutil.AssertNoError(t, err, "")
-	txRwSet1 := &TxRwSet{}
-	testutil.AssertNoError(t, txRwSet1.FromProtoBytes(protoBytes), "")
-	t.Logf("txRwSet=%s, txRwSet1=%s", spew.Sdump(txRwSet), spew.Sdump(txRwSet1))
-	testutil.AssertEquals(t, txRwSet, txRwSet1)
-}
-
-func TestTxRWSetMarshalUnmarshalWithHashedRWSet(t *testing.T) {
-	txRwSet := &TxRwSet{}
-
-	rqi1 := &kvrwset.RangeQueryInfo{StartKey: "k0", EndKey: "k9", ItrExhausted: true}
-	rqi1.SetRawReads([]*kvrwset.KVRead{
-		&kvrwset.KVRead{Key: "k1", Version: &kvrwset.Version{BlockNum: 1, TxNum: 1}},
-		&kvrwset.KVRead{Key: "k2", Version: &kvrwset.Version{BlockNum: 1, TxNum: 2}},
-	})
-
-	rqi2 := &kvrwset.RangeQueryInfo{StartKey: "k00", EndKey: "k90", ItrExhausted: true}
-	rqi2.SetMerkelSummary(&kvrwset.QueryReadsMerkleSummary{MaxDegree: 5, MaxLevel: 4, MaxLevelHashes: [][]byte{[]byte("Hash-1"), []byte("Hash-2")}})
-
-	privateKey1 := "pKey1"
-	privateKey1Hash := util.ComputeSHA256([]byte(privateKey1))
-	privateKey2 := "pKey2"
-	privateKey2Hash := util.ComputeSHA256([]byte(privateKey2))
-	privateValue1 := "pValue1"
-	privateValue1Hash := util.ComputeSHA256([]byte(privateValue1))
-
-	txRwSet.NsRwSets = []*NsRwSet{
-
-		&NsRwSet{"ns1", &kvrwset.KVRWSet{
-			[]*kvrwset.KVRead{&kvrwset.KVRead{Key: "key1", Version: &kvrwset.Version{BlockNum: 1, TxNum: 1}}},
-			[]*kvrwset.RangeQueryInfo{rqi1},
-			[]*kvrwset.KVWrite{&kvrwset.KVWrite{Key: "key2", IsDelete: false, Value: []byte("value2")}},
-			[]*kvrwset.HashedRWSet{
-				&kvrwset.HashedRWSet{
-					Collection: "ns1-c1",
-					HashedReads: []*kvrwset.KVReadHash{
-						&kvrwset.KVReadHash{
-							KeyHash: privateKey1Hash,
-							Version: &kvrwset.Version{BlockNum: 1, TxNum: 1},
-						},
-					},
-					HashedWrites: []*kvrwset.KVWriteHash{
-						&kvrwset.KVWriteHash{
-							KeyHash:   privateKey2Hash,
-							IsDelete:  false,
-							ValueHash: privateValue1Hash,
-						},
-					},
-				},
-			},
-		}},
-
-		&NsRwSet{"ns2", &kvrwset.KVRWSet{
-			[]*kvrwset.KVRead{&kvrwset.KVRead{Key: "key3", Version: &kvrwset.Version{BlockNum: 1, TxNum: 1}}},
-			[]*kvrwset.RangeQueryInfo{rqi2},
-			[]*kvrwset.KVWrite{&kvrwset.KVWrite{Key: "key3", IsDelete: false, Value: []byte("value3")}},
-			nil,
-		}},
-
-		&NsRwSet{"ns3", &kvrwset.KVRWSet{
-			[]*kvrwset.KVRead{&kvrwset.KVRead{Key: "key4", Version: &kvrwset.Version{BlockNum: 1, TxNum: 1}}},
-			nil,
-			[]*kvrwset.KVWrite{&kvrwset.KVWrite{Key: "key4", IsDelete: false, Value: []byte("value4")}},
-			[]*kvrwset.HashedRWSet{
-				&kvrwset.HashedRWSet{
-					Collection: "ns3-c1",
-					HashedReads: []*kvrwset.KVReadHash{
-						&kvrwset.KVReadHash{
-							KeyHash: privateKey1Hash,
-							Version: &kvrwset.Version{BlockNum: 1, TxNum: 1},
-						},
-					},
-					HashedWrites: []*kvrwset.KVWriteHash{
-						&kvrwset.KVWriteHash{
-							KeyHash:   privateKey2Hash,
-							IsDelete:  false,
-							ValueHash: privateValue1Hash,
-						},
-					},
-				},
-			},
 		}},
 	}
 
