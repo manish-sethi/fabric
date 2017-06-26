@@ -20,10 +20,12 @@ import (
 	"os"
 	"testing"
 
+	"github.com/davecgh/go-spew/spew"
 	"github.com/hyperledger/fabric/common/flogging"
 	"github.com/hyperledger/fabric/common/ledger/testutil"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/version"
 	"github.com/hyperledger/fabric/protos/ledger/rwset/kvrwset"
+	"github.com/kr/pretty"
 )
 
 func TestMain(m *testing.M) {
@@ -60,17 +62,107 @@ func TestRWSetHolder(t *testing.T) {
 
 	txRWSet := rwSetBuilder.GetTxReadWriteSet()
 
-	ns1RWSet := &NsRwSet{"ns1", &kvrwset.KVRWSet{
-		Reads:            []*kvrwset.KVRead{NewKVRead("key1", version.NewHeight(1, 1)), NewKVRead("key2", version.NewHeight(1, 2))},
-		RangeQueriesInfo: []*kvrwset.RangeQueryInfo{rqi1, rqi3},
-		Writes:           []*kvrwset.KVWrite{newKVWrite("key2", []byte("value2"))}}}
+	ns1RWSet := &NsRwSet{
+		NameSpace: "ns1",
+		KvRwSet: &kvrwset.KVRWSet{
+			Reads:            []*kvrwset.KVRead{NewKVRead("key1", version.NewHeight(1, 1)), NewKVRead("key2", version.NewHeight(1, 2))},
+			RangeQueriesInfo: []*kvrwset.RangeQueryInfo{rqi1, rqi3},
+			Writes:           []*kvrwset.KVWrite{newKVWrite("key2", []byte("value2"))}}}
 
-	ns2RWSet := &NsRwSet{"ns2", &kvrwset.KVRWSet{
-		Reads:            []*kvrwset.KVRead{NewKVRead("key2", version.NewHeight(1, 2))},
-		RangeQueriesInfo: nil,
-		Writes:           []*kvrwset.KVWrite{newKVWrite("key3", []byte("value3"))}}}
+	ns2RWSet := &NsRwSet{
+		NameSpace: "ns2",
+		KvRwSet: &kvrwset.KVRWSet{
+			Reads:            []*kvrwset.KVRead{NewKVRead("key2", version.NewHeight(1, 2))},
+			RangeQueriesInfo: nil,
+			Writes:           []*kvrwset.KVWrite{newKVWrite("key3", []byte("value3"))}}}
 
-	expectedTxRWSet := &TxRwSet{[]*NsRwSet{ns1RWSet, ns2RWSet}}
-	t.Logf("Actual=%s\n Expected=%s", txRWSet, expectedTxRWSet)
+	expectedTxRWSet := &TxRwSet{NsRwSets: []*NsRwSet{ns1RWSet, ns2RWSet}}
+	t.Logf("Actual=%s\n Expected=%s, Diff=%s", spew.Sdump(txRWSet), spew.Sdump(expectedTxRWSet), pretty.Diff(txRWSet, expectedTxRWSet))
 	testutil.AssertEquals(t, txRWSet, expectedTxRWSet)
+}
+
+func TestRWSetHolderWithPrivateData(t *testing.T) {
+	rwSetBuilder := NewRWSetBuilder()
+
+	rwSetBuilder.AddToReadSet("ns1", "key2", version.NewHeight(1, 2))
+	rwSetBuilder.AddToReadSet("ns1", "key1", version.NewHeight(1, 1))
+	rwSetBuilder.AddToWriteSet("ns1", "key2", []byte("value2"))
+
+	rwSetBuilder.AddToHashedReadSet("ns1", "coll1", "key1", version.NewHeight(1, 1))
+	rwSetBuilder.AddToHashedReadSet("ns1", "coll1", "key2", version.NewHeight(1, 2))
+	rwSetBuilder.AddToPvtAndHashedWriteSet("ns1", "coll1", "key2", []byte("pvt_value2"))
+
+	rwSetBuilder.AddToHashedReadSet("ns1", "coll2", "key1", version.NewHeight(1, 2))
+	rwSetBuilder.AddToPvtAndHashedWriteSet("ns1", "coll2", "key1", []byte("pvt_value1"))
+	rwSetBuilder.AddToPvtAndHashedWriteSet("ns1", "coll2", "key2", nil)
+
+	ns1RWSet := &NsRwSet{
+		NameSpace: "ns1",
+		KvRwSet: &kvrwset.KVRWSet{
+			Reads:            []*kvrwset.KVRead{NewKVRead("key1", version.NewHeight(1, 1)), NewKVRead("key2", version.NewHeight(1, 2))},
+			RangeQueriesInfo: nil,
+			Writes:           []*kvrwset.KVWrite{newKVWrite("key2", []byte("value2"))},
+		},
+		CollHashedRwSet: []*CollHashedRwSet{
+			&CollHashedRwSet{CollectionName: "coll1",
+				HashedRwSet: &kvrwset.HashedRWSet{
+					HashedReads: []*kvrwset.KVReadHash{
+						constructTestPvtKVReadHash(t, "key1", version.NewHeight(1, 1)),
+						constructTestPvtKVReadHash(t, "key2", version.NewHeight(1, 2)),
+					},
+					HashedWrites: []*kvrwset.KVWriteHash{
+						constructTestPvtKVWriteHash(t, "key2", []byte("pvt_value2")),
+					},
+				},
+			},
+			&CollHashedRwSet{CollectionName: "coll2",
+				HashedRwSet: &kvrwset.HashedRWSet{
+					HashedReads: []*kvrwset.KVReadHash{
+						constructTestPvtKVReadHash(t, "key1", version.NewHeight(1, 2)),
+					},
+					HashedWrites: []*kvrwset.KVWriteHash{
+						constructTestPvtKVWriteHash(t, "key1", []byte("pvt_value1")),
+						constructTestPvtKVWriteHash(t, "key2", nil),
+					},
+				},
+			},
+		},
+	}
+
+	txRWSet := rwSetBuilder.GetTxReadWriteSet()
+	expectedTxRWSet := &TxRwSet{NsRwSets: []*NsRwSet{ns1RWSet}}
+	t.Logf("Actual=%s\n Expected=%s, Diff=%s", spew.Sdump(txRWSet), spew.Sdump(expectedTxRWSet), pretty.Diff(txRWSet, expectedTxRWSet))
+	testutil.AssertEquals(t, txRWSet, expectedTxRWSet)
+
+	ns1PvtRWSet := &NsPvtRwSet{
+		NameSpace: "ns1",
+		CollPvtRwSet: []*CollPvtRwSet{
+			&CollPvtRwSet{CollectionName: "coll1",
+				KvRwSet: &kvrwset.KVRWSet{
+					Writes: []*kvrwset.KVWrite{newKVWrite("key2", []byte("pvt_value2"))},
+				},
+			},
+			&CollPvtRwSet{CollectionName: "coll2",
+				KvRwSet: &kvrwset.KVRWSet{
+					Writes: []*kvrwset.KVWrite{newKVWrite("key1", []byte("pvt_value1")), newKVWrite("key2", nil)},
+				},
+			},
+		},
+	}
+	expectedPvtRWSet := &TxPvtRwSet{NsPvtRwSet: []*NsPvtRwSet{ns1PvtRWSet}}
+	actualPvtTxRWSet := rwSetBuilder.GetTxPvtReadWriteSet()
+	t.Logf("ActualPvt=%s\n ExpectedPvt=%s, DiffPvt=%s", spew.Sdump(actualPvtTxRWSet), spew.Sdump(expectedPvtRWSet), pretty.Diff(actualPvtTxRWSet, expectedTxRWSet))
+	testutil.AssertEquals(t, actualPvtTxRWSet, expectedPvtRWSet)
+}
+
+func constructTestPvtKVReadHash(t *testing.T, key string, version *version.Height) *kvrwset.KVReadHash {
+	kvReadHash, err := newPvtKVReadHash(key, version)
+	testutil.AssertNoError(t, err, "")
+	return kvReadHash
+}
+
+func constructTestPvtKVWriteHash(t *testing.T, key string, value []byte) *kvrwset.KVWriteHash {
+	_, kvWriteHash, err := newPvtKVWriteAndHash(key, value)
+	testutil.AssertNoError(t, err, "")
+	return kvWriteHash
 }
