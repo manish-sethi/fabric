@@ -28,7 +28,6 @@ import (
 	"github.com/hyperledger/fabric/core/ledger"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/history/historydb"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/history/historydb/historyleveldb"
-	"github.com/hyperledger/fabric/core/ledger/kvledger/pvtrwstorage"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/statedb"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/statedb/statecouchdb"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/statedb/stateleveldb"
@@ -52,11 +51,10 @@ var (
 
 // Provider implements interface ledger.PeerLedgerProvider
 type Provider struct {
-	idStore                *idStore
-	blockStoreProvider     blkstorage.BlockStoreProvider
-	vdbProvider            statedb.VersionedDBProvider
-	historydbProvider      historydb.HistoryDBProvider
-	transientStoreProvider pvtrwstorage.TransientStoreProvider
+	idStore            *idStore
+	blockStoreProvider blkstorage.BlockStoreProvider
+	vdbProvider        statedb.VersionedDBProvider
+	historydbProvider  historydb.HistoryDBProvider
 }
 
 // NewProvider instantiates a new Provider.
@@ -96,15 +94,12 @@ func NewProvider() (ledger.PeerLedgerProvider, error) {
 		}
 	}
 
-	// Initialize the transient store (temporary storage of private rwset
-	transientStoreProvider := pvtrwstorage.NewTransientStoreProvider()
-
 	// Initialize the history database (index for history of values by key)
 	var historydbProvider historydb.HistoryDBProvider
 	historydbProvider = historyleveldb.NewHistoryDBProvider()
 
 	logger.Info("ledger provider Initialized")
-	provider := &Provider{idStore, blockStoreProvider, vdbProvider, historydbProvider, transientStoreProvider}
+	provider := &Provider{idStore, blockStoreProvider, vdbProvider, historydbProvider}
 	provider.recoverUnderConstructionLedger()
 	return provider, nil
 }
@@ -177,15 +172,9 @@ func (provider *Provider) openInternal(ledgerID string) (ledger.PeerLedger, erro
 		return nil, err
 	}
 
-	// Get the transient store for a chain/ledger
-	transientStore, err := provider.transientStoreProvider.OpenStore(ledgerID)
-	if err != nil {
-		return nil, err
-	}
-
 	// Create a kvLedger for this chain/ledger, which encasulates the underlying data stores
 	// (id store, blockstore, state database, history database)
-	l, err := newKVLedger(ledgerID, blockStore, vDB, historyDB, transientStore)
+	l, err := newKVLedger(ledgerID, blockStore, vDB, historyDB)
 	if err != nil {
 		return nil, err
 	}
