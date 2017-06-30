@@ -37,7 +37,7 @@ var ErrLedgerAlreadyOpened = errors.New("Ledger already opened")
 // ErrLedgerMgmtNotInitialized is thrown when ledger mgmt is used before initializing this
 var ErrLedgerMgmtNotInitialized = errors.New("ledger mgmt should be initialized before using")
 
-var openedLedgers map[string]ledger.PeerLedger
+var openedLedgers map[string]ledger.PrivacyEnabledPeerLedger
 var ledgerProvider ledger.PeerLedgerProvider
 var lock sync.Mutex
 var initialized bool
@@ -55,7 +55,7 @@ func initialize() {
 	lock.Lock()
 	defer lock.Unlock()
 	initialized = true
-	openedLedgers = make(map[string]ledger.PeerLedger)
+	openedLedgers = make(map[string]ledger.PrivacyEnabledPeerLedger)
 	provider, err := kvledger.NewProvider()
 	if err != nil {
 		panic(fmt.Errorf("Error in instantiating ledger provider: %s", err))
@@ -67,7 +67,7 @@ func initialize() {
 // CreateLedger creates a new ledger with the given genesis block.
 // This function guarantees that the creation of ledger and committing the genesis block would an atomic action
 // The chain id retrieved from the genesis block is treated as a ledger id
-func CreateLedger(genesisBlock *common.Block) (ledger.PeerLedger, error) {
+func CreateLedger(genesisBlock *common.Block) (ledger.PrivacyEnabledPeerLedger, error) {
 	lock.Lock()
 	defer lock.Unlock()
 	if !initialized {
@@ -90,7 +90,7 @@ func CreateLedger(genesisBlock *common.Block) (ledger.PeerLedger, error) {
 }
 
 // OpenLedger returns a ledger for the given id
-func OpenLedger(id string) (ledger.PeerLedger, error) {
+func OpenLedger(id string) (ledger.PrivacyEnabledPeerLedger, error) {
 	logger.Infof("Opening ledger with id = %s", id)
 	lock.Lock()
 	defer lock.Unlock()
@@ -137,14 +137,14 @@ func Close() {
 	logger.Infof("ledger mgmt closed")
 }
 
-func wrapLedger(id string, l ledger.PeerLedger) ledger.PeerLedger {
+func wrapLedger(id string, l ledger.PrivacyEnabledPeerLedger) ledger.PrivacyEnabledPeerLedger {
 	return &closableLedger{id, l}
 }
 
 // closableLedger extends from actual validated ledger and overwrites the Close method
 type closableLedger struct {
 	id string
-	ledger.PeerLedger
+	ledger.PrivacyEnabledPeerLedger
 }
 
 // Close closes the actual ledger and removes the entries from opened ledgers map
@@ -155,6 +155,6 @@ func (l *closableLedger) Close() {
 }
 
 func (l *closableLedger) closeWithoutLock() {
-	l.PeerLedger.Close()
+	l.PrivacyEnabledPeerLedger.Close()
 	delete(openedLedgers, l.id)
 }
