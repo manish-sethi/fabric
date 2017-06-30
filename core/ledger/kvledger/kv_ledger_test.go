@@ -17,11 +17,14 @@ limitations under the License.
 package kvledger
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"testing"
 
+	commonledger "github.com/hyperledger/fabric/common/ledger"
 	"github.com/hyperledger/fabric/common/ledger/testutil"
+	lgr "github.com/hyperledger/fabric/core/ledger"
 	"github.com/hyperledger/fabric/core/ledger/ledgerconfig"
 	ledgertestutil "github.com/hyperledger/fabric/core/ledger/testutil"
 	"github.com/hyperledger/fabric/protos/common"
@@ -548,4 +551,161 @@ func TestLedgerWithCouchDbEnabledWithBinaryAndJSONData(t *testing.T) {
 		testutil.AssertEquals(t, retrievedValue, expectedValue)
 
 	}
+}
+
+func TestKVLedgerTransientStore(t *testing.T) {
+	env := newTestEnv(t)
+	defer env.cleanup()
+	provider, _ := NewProvider()
+	defer provider.Close()
+
+	// Genesis Block
+	bg, gb := testutil.NewBlockGenerator(t, "testLedger", false)
+	gbHash := gb.Header.Hash()
+
+	// Create a ledger with the genesis block
+	ledger, _ := provider.Create(gb)
+	defer ledger.Close()
+
+	bcInfo, _ := ledger.GetBlockchainInfo()
+	testutil.AssertEquals(t, bcInfo, &common.BlockchainInfo{
+		Height: 1, CurrentBlockHash: gbHash, PreviousBlockHash: nil})
+
+	// TEST PutPrivateSimulationResults()
+
+	// Simulation results produced by endorser 0
+	txId := "tx-1"
+	endorser0 := "endorser0"
+	resultE0 := []byte("results")
+
+	// Persist simulation results into transient store
+	err := ledger.PutPrivateSimulationResults(txId, endorser0, resultE0)
+	testutil.AssertNoError(t, err, "Error upon PutPrivateSimulationResults")
+
+	// Simulation results produced by endorser 1
+	endorser1 := "endorser1"
+	resultE1 := []byte("results")
+
+	// Persist simulation results into transient store
+	err = ledger.PutPrivateSimulationResults(txId, endorser1, resultE1)
+	testutil.AssertNoError(t, err, "Error upon PutPrivateSimulationResults")
+
+	// TEST GetPrivateSimulationResults()
+
+	iter, err := ledger.GetPrivateSimulationResults(txId)
+	testutil.AssertNoError(t, err, "Error upon GetPrivateSimulationResults")
+
+	// Expected Simulation Results from GetPrivateSimulationResults()
+	var expectedEndorsersResults []*lgr.EndorserPrivateSimulationResults
+
+	// Endorser 0's simulation result (expected)
+	endorser0SimulationResults := &lgr.EndorserPrivateSimulationResults{
+		EndorserId:               endorser0,
+		EndorsementBlockHeight:   bcInfo.Height,
+		PrivateSimulationResults: resultE0,
+	}
+	expectedEndorsersResults = append(expectedEndorsersResults, endorser0SimulationResults)
+
+	// Endorser 1's simulation result (expected)
+	endorser1SimulationResults := &lgr.EndorserPrivateSimulationResults{
+		EndorserId:               endorser1,
+		EndorsementBlockHeight:   bcInfo.Height,
+		PrivateSimulationResults: resultE1,
+	}
+	expectedEndorsersResults = append(expectedEndorsersResults, endorser1SimulationResults)
+
+	// Actual Simulation Results from GetPrivateSimulationResults()
+	var actualEndorsersResults []*lgr.EndorserPrivateSimulationResults
+	var result commonledger.QueryResult
+	for true {
+		result, err = iter.Next()
+		testutil.AssertNoError(t, err, "Error upon iterating over endorsement results")
+		if result == nil {
+			break
+		}
+		actualEndorsersResults = append(actualEndorsersResults, result.(*lgr.EndorserPrivateSimulationResults))
+	}
+	iter.Close()
+	testutil.AssertEquals(t, expectedEndorsersResults, actualEndorsersResults)
+
+	// TEST PurgeTransientData() and TransientDataMinBlockNum()
+
+	simulator, _ := ledger.NewTxSimulator()
+	simulator.SetState("ns1", "key1", []byte("value1"))
+	simulator.SetState("ns1", "key2", []byte("value2"))
+	simulator.SetState("ns1", "key3", []byte("value3"))
+	simulator.Done()
+	simRes, _ := simulator.GetTxSimulationResults()
+	block1 := bg.NextBlock([][]byte{simRes})
+	ledger.Commit(block1)
+
+	bcInfo, _ = ledger.GetBlockchainInfo()
+	block1Hash := block1.Header.Hash()
+	testutil.AssertEquals(t, bcInfo, &common.BlockchainInfo{
+		Height: 2, CurrentBlockHash: block1Hash, PreviousBlockHash: gbHash})
+
+	endorser2 := "endorser2"
+	resultE2 := []byte("results")
+
+	// Persist simulation results into transient store
+	err = ledger.PutPrivateSimulationResults(txId, endorser2, resultE2)
+	testutil.AssertNoError(t, err, "Error upon PutPrivateSimulationResults")
+
+	var minBlockToRetain uint64
+	var minBlockRetained uint64
+
+	// Retain all endrosement results which were created at height greater than or equal to 1
+	minBlockToRetain = 1
+	err = ledger.PurgeTransientData(minBlockToRetain)
+	testutil.AssertNoError(t, err, "Error upon PurgeTransientData")
+
+	// Check the minimum height from the retained endorsement results
+	minBlockRetained, err = ledger.TransientDataMinBlockNum()
+	testutil.AssertNoError(t, err, "Error upon TransientDataMinBlockNum")
+	testutil.AssertEquals(t, minBlockToRetain, minBlockRetained)
+
+	// Retain all endrosement results which were created at height greater than or equal to 2
+	minBlockToRetain = 2
+	err = ledger.PurgeTransientData(minBlockToRetain)
+	testutil.AssertNoError(t, err, "Error upon PurgeTransientData")
+
+	// Check the minimum height from the retained endorsement results
+	minBlockRetained, err = ledger.TransientDataMinBlockNum()
+	testutil.AssertNoError(t, err, "Error upon TransientDataMinBlockNum")
+	testutil.AssertEquals(t, minBlockToRetain, minBlockRetained)
+
+	// Call GetPrivateSimulationResults() to verify only endorser 2 results exist
+	iter, err = ledger.GetPrivateSimulationResults(txId)
+	testutil.AssertNoError(t, err, "Error upon GetPrivateSimulationResults")
+
+	expectedEndorsersResults = nil
+
+	// Endorser 2's simulation result (expected)
+	endorser2SimulationResults := &lgr.EndorserPrivateSimulationResults{
+		EndorserId:               endorser2,
+		EndorsementBlockHeight:   bcInfo.Height,
+		PrivateSimulationResults: resultE2,
+	}
+	expectedEndorsersResults = append(expectedEndorsersResults, endorser2SimulationResults)
+
+	actualEndorsersResults = nil
+	for true {
+		result, err = iter.Next()
+		testutil.AssertNoError(t, err, "Error upon iterating over endorsement results")
+		if result == nil {
+			break
+		}
+		actualEndorsersResults = append(actualEndorsersResults, result.(*lgr.EndorserPrivateSimulationResults))
+	}
+	iter.Close()
+	testutil.AssertEquals(t, expectedEndorsersResults, actualEndorsersResults)
+
+	// Retain all endrosement results which were created at height greater than or equal to 3
+	minBlockToRetain = 3
+	err = ledger.PurgeTransientData(minBlockToRetain)
+	testutil.AssertNoError(t, err, "Error upon PurgeTransientData")
+
+	// Check the minimum height from the retained endorsement results
+	minBlockRetained, err = ledger.TransientDataMinBlockNum()
+	testutil.AssertEquals(t, err, errors.New("Transient store is empty"))
 }
