@@ -178,6 +178,7 @@ type PrivacyEnabledPeerLedger interface {
 
 // EndorserPrivateSimulationResults captures the deatils of the simulation results specific to an endorser
 type EndorserPrivateSimulationResults struct {
-	endorserid               string
-	privateSimulationResults []byte
+	EndorserId               string
+	EndorsementBlockHeight   uint64
+	PrivateSimulationResults []byte
 }

@@ -9,5 +9,3 @@
 *.js text eol=lf
 *.txt text eol=lf
 LICENSE text eol=lf
-# Define binary file attributes.
-rwsetV1ProtoBytes binary
