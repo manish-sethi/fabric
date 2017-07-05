@@ -579,7 +579,7 @@ func TestKVLedgerTransientStore(t *testing.T) {
 	resultE0 := []byte("results")
 
 	// Persist simulation results into transient store
-	err := ledger.PutPrivateSimulationResults(txId, endorser0, resultE0)
+	err := ledger.PutPrivateSimulationResults(txId, endorser0, bcInfo.Height, resultE0)
 	testutil.AssertNoError(t, err, "Error upon PutPrivateSimulationResults")
 
 	// Simulation results produced by endorser 1
@@ -587,7 +587,7 @@ func TestKVLedgerTransientStore(t *testing.T) {
 	resultE1 := []byte("results")
 
 	// Persist simulation results into transient store
-	err = ledger.PutPrivateSimulationResults(txId, endorser1, resultE1)
+	err = ledger.PutPrivateSimulationResults(txId, endorser1, bcInfo.Height, resultE1)
 	testutil.AssertNoError(t, err, "Error upon PutPrivateSimulationResults")
 
 	// TEST GetPrivateSimulationResults()
@@ -648,7 +648,7 @@ func TestKVLedgerTransientStore(t *testing.T) {
 	resultE2 := []byte("results")
 
 	// Persist simulation results into transient store
-	err = ledger.PutPrivateSimulationResults(txId, endorser2, resultE2)
+	err = ledger.PutPrivateSimulationResults(txId, endorser2, bcInfo.Height, resultE2)
 	testutil.AssertNoError(t, err, "Error upon PutPrivateSimulationResults")
 
 	var minBlockToRetain uint64
