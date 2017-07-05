@@ -38,7 +38,7 @@ type Chaincode interface {
 }
 
 // ChaincodeStubInterface is used by deployable chaincode apps to access and
-// modify their ledgers
+// modify their ledgers and private data.
 type ChaincodeStubInterface interface {
 	// GetArgs returns the arguments intended for the chaincode Init and Invoke
 	// as an array of byte arrays.
@@ -161,6 +161,26 @@ type ChaincodeStubInterface interface {
 	// should therefore not use GetHistoryForKey as part of transactions that
 	// update ledger, and should limit use to read-only chaincode operations.
 	GetHistoryForKey(key string) (HistoryQueryIteratorInterface, error)
+
+	// GetPrivateData returns the value of the specified `key` from the specified
+	// `collection`. Note that GetPrivateData doesn't read data from the
+	// private writeset, which has not been committed to the `collection`. In other words,
+	// GetPrivateData doesn't consider data modified by PutPrivateData that has not been committed.
+	GetPrivateData(collection string, key string) ([]byte, error)
+
+	// PutPrivateData puts the specified `key` and `value` into the transaction's
+	// private writeset. PutPrivateData doesn't effect the `collection`
+	// until the transaction is validated and successfully committed.
+	// Simple keys must not be an empty string and must not start with null
+	// character (0x00), in order to avoid range query collisions with
+	// composite keys, which internally get prefixed with 0x00 as composite
+	// key namespace.
+	PutPrivateData(collection string, key string, value []byte) error
+
+	// DelState records the specified `key` to be deleted from the specified `collection`
+	// in the private writeset of the transaction proposal. The `key` and its value will be deleted from
+	// the `collection` when the transaction is validated and successfully committed.
+	DelPrivateData(collection string, key string) error
 
 	// GetCreator returns `SignatureHeader.Creator` (e.g. an identity)
 	// of the `SignedProposal`. This is the identity of the agent (or user)

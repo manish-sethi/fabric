@@ -374,26 +374,30 @@ func (handler *Handler) afterError(e *fsm.Event) {
 	}
 }
 
-// TODO: Implement method to get and put entire state map and not one key at a time?
-// handleGetState communicates with the validator to fetch the requested state information from the ledger.
-func (handler *Handler) handleGetState(key string, txid string) ([]byte, error) {
+func (handler *Handler) execute(msg *pb.ChaincodeMessage, txid string) (pb.ChaincodeMessage, error) {
 	// Create the channel on which to communicate the response from validating peer
 	var respChan chan pb.ChaincodeMessage
 	var err error
 	if respChan, err = handler.createChannel(txid); err != nil {
-		return nil, err
+		return pb.ChaincodeMessage{}, err
 	}
 
 	defer handler.deleteChannel(txid)
 
-	// Send GET_STATE message to validator chaincode support
-	payload := []byte(key)
-	msg := &pb.ChaincodeMessage{Type: pb.ChaincodeMessage_GET_STATE, Payload: payload, Txid: txid}
+	return handler.sendReceive(msg, respChan)
+}
+
+// TODO: Implement method to get and put entire state map and not one key at a time?
+// handleGetState communicates with the validator to fetch the requested state information from the ledger.
+func (handler *Handler) handleGetState(collection string, key string, txid string) ([]byte, error) {
+	// Construct payload for GET_STATE
+	payloadBytes, _ := proto.Marshal(&pb.GetState{Collection: collection, Key: key})
+	msg := &pb.ChaincodeMessage{Type: pb.ChaincodeMessage_GET_STATE, Payload: payloadBytes, Txid: txid}
 	chaincodeLogger.Debugf("[%s]Sending %s", shorttxid(msg.Txid), pb.ChaincodeMessage_GET_STATE)
 
-	var responseMsg pb.ChaincodeMessage
-
-	if responseMsg, err = handler.sendReceive(msg, respChan); err != nil {
+	// Execute the request and get response
+	responseMsg, err := handler.execute(msg, txid)
+	if err != nil {
 		return nil, errors.New(fmt.Sprintf("[%s]error sending GET_STATE %s", shorttxid(txid), err))
 	}
 
@@ -413,29 +417,15 @@ func (handler *Handler) handleGetState(key string, txid string) ([]byte, error) 
 }
 
 // handlePutState communicates with the validator to put state information into the ledger.
-func (handler *Handler) handlePutState(key string, value []byte, txid string) error {
-	// Check if this is a transaction
-	chaincodeLogger.Debugf("[%s]Inside putstate", shorttxid(txid))
-
-	//we constructed a valid object. No need to check for error
-	payloadBytes, _ := proto.Marshal(&pb.PutStateInfo{Key: key, Value: value})
-
-	// Create the channel on which to communicate the response from validating peer
-	var respChan chan pb.ChaincodeMessage
-	var err error
-	if respChan, err = handler.createChannel(txid); err != nil {
-		return err
-	}
-
-	defer handler.deleteChannel(txid)
-
-	// Send PUT_STATE message to validator chaincode support
+func (handler *Handler) handlePutState(collection string, key string, value []byte, txid string) error {
+	// Construct payload for PUT_STATE
+	payloadBytes, _ := proto.Marshal(&pb.PutState{Collection: collection, Key: key, Value: value})
 	msg := &pb.ChaincodeMessage{Type: pb.ChaincodeMessage_PUT_STATE, Payload: payloadBytes, Txid: txid}
 	chaincodeLogger.Debugf("[%s]Sending %s", shorttxid(msg.Txid), pb.ChaincodeMessage_PUT_STATE)
 
-	var responseMsg pb.ChaincodeMessage
-
-	if responseMsg, err = handler.sendReceive(msg, respChan); err != nil {
+	// Execute the request and get response
+	responseMsg, err := handler.execute(msg, txid)
+	if err != nil {
 		return errors.New(fmt.Sprintf("[%s]error sending PUT_STATE %s", msg.Txid, err))
 	}
 
@@ -456,24 +446,15 @@ func (handler *Handler) handlePutState(key string, value []byte, txid string) er
 }
 
 // handleDelState communicates with the validator to delete a key from the state in the ledger.
-func (handler *Handler) handleDelState(key string, txid string) error {
-	// Create the channel on which to communicate the response from validating peer
-	var respChan chan pb.ChaincodeMessage
-	var err error
-	if respChan, err = handler.createChannel(txid); err != nil {
-		return err
-	}
-
-	defer handler.deleteChannel(txid)
-
-	// Send DEL_STATE message to validator chaincode support
-	payload := []byte(key)
-	msg := &pb.ChaincodeMessage{Type: pb.ChaincodeMessage_DEL_STATE, Payload: payload, Txid: txid}
+func (handler *Handler) handleDelState(collection string, key string, txid string) error {
+	// Construct payload for DEL_STATE
+	payloadBytes, _ := proto.Marshal(&pb.DelState{Collection: collection, Key: key})
+	msg := &pb.ChaincodeMessage{Type: pb.ChaincodeMessage_DEL_STATE, Payload: payloadBytes, Txid: txid}
 	chaincodeLogger.Debugf("[%s]Sending %s", shorttxid(msg.Txid), pb.ChaincodeMessage_DEL_STATE)
 
-	var responseMsg pb.ChaincodeMessage
-
-	if responseMsg, err = handler.sendReceive(msg, respChan); err != nil {
+	// Execute the request and get response
+	responseMsg, err := handler.execute(msg, txid)
+	if err != nil {
 		return errors.New(fmt.Sprintf("[%s]error sending DEL_STATE %s", shorttxid(msg.Txid), pb.ChaincodeMessage_DEL_STATE))
 	}
 
