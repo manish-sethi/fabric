@@ -55,7 +55,7 @@ func TestLedgerMgmt(t *testing.T) {
 	defer CleanupTestEnv()
 
 	numLedgers := 10
-	ledgers := make([]ledger.PeerLedger, numLedgers)
+	ledgers := make([]ledger.PrivacyEnabledPeerLedger, numLedgers)
 	for i := 0; i < numLedgers; i++ {
 		gb, _ := test.MakeGenesisBlock(constructTestLedgerID(i))
 		l, _ := CreateLedger(gb)
