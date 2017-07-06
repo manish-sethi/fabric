@@ -31,8 +31,8 @@ message KVRWSet {
 
 // HashedRWSet encapsulates hashed representation of a private read-write set for KV or Document data model
 message HashedRWSet {
-    repeated KVReadHash hashed_reads = 2;
-    repeated KVWriteHash hashed_writes = 3;
+    repeated KVReadHash hashed_reads = 1;
+    repeated KVWriteHash hashed_writes = 2;
 }
 
 // KVRead captures a read operation performed during transaction simulation
