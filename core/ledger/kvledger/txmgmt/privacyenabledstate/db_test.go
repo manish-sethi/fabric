@@ -18,12 +18,20 @@ package privacyenabledstate
 
 import (
 	"fmt"
+	"os"
 	"testing"
 
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/statedb"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/version"
+	"github.com/hyperledger/fabric/core/ledger/util"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 )
+
+func TestMain(m *testing.M) {
+	viper.Set("peer.fileSystemPath", "/tmp/fabric/ledgertests/kvledger/txmgmt/privacyenabledstate")
+	os.Exit(m.Run())
+}
 
 func TestPvtDataBatch(t *testing.T) {
 	batch := NewPvtDataBatch()
@@ -54,16 +62,16 @@ func TestPvtDataBatch(t *testing.T) {
 
 func TestDB(t *testing.T) {
 	for _, env := range testEnvs {
-		t.Run(env.getName(), func(t *testing.T) {
+		t.Run(env.GetName(), func(t *testing.T) {
 			testDB(t, env)
 		})
 	}
 }
 
-func testDB(t *testing.T, env testEnv) {
-	env.init(t)
-	defer env.cleanup()
-	db := env.getDBHandle("test-ledger-id")
+func testDB(t *testing.T, env TestEnv) {
+	env.Init(t)
+	defer env.Cleanup()
+	db := env.GetDBHandle("test-ledger-id")
 
 	pubDataBatch := statedb.NewUpdateBatch()
 	pvtDataBatch := NewPvtDataBatch()
@@ -82,7 +90,7 @@ func testDB(t *testing.T, env testEnv) {
 	assert.NoError(t, err)
 	assert.Equal(t, &statedb.VersionedValue{Value: []byte("value1"), Version: version.NewHeight(1, 1)}, vv)
 
-	vv, err = db.GetPrivateState("ns1", "coll1", "key1")
+	vv, err = db.GetPrivateData("ns1", "coll1", "key1")
 	assert.NoError(t, err)
 	assert.Equal(t, &statedb.VersionedValue{Value: []byte("pvt_value1"), Version: version.NewHeight(1, 4)}, vv)
 
@@ -101,7 +109,7 @@ func testDB(t *testing.T, env testEnv) {
 	assert.NoError(t, err)
 	assert.Nil(t, vv)
 
-	vv, err = db.GetPrivateState("ns1", "coll1", "key1")
+	vv, err = db.GetPrivateData("ns1", "coll1", "key1")
 	assert.NoError(t, err)
 	assert.Nil(t, vv)
 
@@ -110,4 +118,26 @@ func testDB(t *testing.T, env testEnv) {
 	assert.Nil(t, vv)
 
 	//TODO add tests for functions GetPrivateStateMultipleKeys and GetPrivateStateRangeScanIterator
+}
+
+func testComputeStringHash(t *testing.T, str string) []byte {
+	hash, err := util.ComputeStringHash(str)
+	assert.NoError(t, err)
+	return hash
+}
+
+func testComputeHash(t *testing.T, b []byte) []byte {
+	hash, err := util.ComputeHash(b)
+	assert.NoError(t, err)
+	return hash
+}
+
+func putToBatches(t *testing.T, pvtDataBatch PvtDataBatch, hashesBatch PvtDataBatch, ns, coll, key string, value []byte, ver *version.Height) {
+	pvtDataBatch.Put(ns, coll, key, value, ver)
+	hashesBatch.Put(ns, coll, string(testComputeStringHash(t, key)), testComputeHash(t, value), ver)
+}
+
+func deleteToBatches(t *testing.T, pvtDataBatch PvtDataBatch, hashesBatch PvtDataBatch, ns, coll, key string, ver *version.Height) {
+	pvtDataBatch.Delete(ns, coll, key, ver)
+	hashesBatch.Delete(ns, coll, string(testComputeStringHash(t, key)), ver)
 }

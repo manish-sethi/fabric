@@ -29,9 +29,7 @@ import (
 	"github.com/hyperledger/fabric/core/ledger/kvledger/history/historydb"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/history/historydb/historyleveldb"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/pvtrwstorage"
-	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/statedb"
-	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/statedb/statecouchdb"
-	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/statedb/stateleveldb"
+	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/privacyenabledstate"
 	"github.com/hyperledger/fabric/core/ledger/ledgerconfig"
 	"github.com/hyperledger/fabric/protos/common"
 	"github.com/hyperledger/fabric/protos/utils"
@@ -54,7 +52,7 @@ var (
 type Provider struct {
 	idStore                *idStore
 	blockStoreProvider     blkstorage.BlockStoreProvider
-	vdbProvider            statedb.VersionedDBProvider
+	vdbProvider            privacyenabledstate.DBProvider
 	historydbProvider      historydb.HistoryDBProvider
 	transientStoreProvider pvtrwstorage.TransientStoreProvider
 }
@@ -83,19 +81,10 @@ func NewProvider() (ledger.PeerLedgerProvider, error) {
 		indexConfig)
 
 	// Initialize the versioned database (state database)
-	var vdbProvider statedb.VersionedDBProvider
-	if !ledgerconfig.IsCouchDBEnabled() {
-		logger.Debug("Constructing leveldb VersionedDBProvider")
-		vdbProvider = stateleveldb.NewVersionedDBProvider()
-	} else {
-		logger.Debug("Constructing CouchDB VersionedDBProvider")
-		var err error
-		vdbProvider, err = statecouchdb.NewVersionedDBProvider()
-		if err != nil {
-			return nil, err
-		}
+	vdbProvider, err := privacyenabledstate.NewCommonStorageDBProvider()
+	if err != nil {
+		return nil, err
 	}
-
 	// Initialize the transient store (temporary storage of private rwset
 	transientStoreProvider := pvtrwstorage.NewTransientStoreProvider()
 
