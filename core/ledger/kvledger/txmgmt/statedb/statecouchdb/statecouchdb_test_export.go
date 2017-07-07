@@ -44,7 +44,7 @@ func NewTestVDBEnv(t testing.TB) *TestVDBEnv {
 func (env *TestVDBEnv) Cleanup(dbName string) {
 	env.t.Logf("Cleaningup TestVDBEnv")
 	env.DBProvider.Close()
-
+	CleanupDB(dbName)
 }
 
 // CleanupDB drops the test couch databases

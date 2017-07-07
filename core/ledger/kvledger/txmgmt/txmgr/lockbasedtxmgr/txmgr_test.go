@@ -28,12 +28,13 @@ import (
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/version"
 	ledgertestutil "github.com/hyperledger/fabric/core/ledger/testutil"
 	"github.com/hyperledger/fabric/protos/ledger/queryresult"
+	"github.com/spf13/viper"
 )
 
 func TestMain(m *testing.M) {
 	ledgertestutil.SetupCoreYAMLConfig()
 	flogging.SetModuleLevel("lockbasedtxmgr", "debug")
-
+	viper.Set("peer.fileSystemPath", "/tmp/fabric/ledgertests/kvledger/txmgmt/txmgr/lockbasedtxmgr")
 	os.Exit(m.Run())
 }
 
@@ -50,7 +51,7 @@ func TestTxSimulatorWithNoExistingData(t *testing.T) {
 
 func testTxSimulatorWithNoExistingData(t *testing.T, env testEnv) {
 	txMgr := env.getTxMgr()
-	s, _ := txMgr.NewTxSimulator()
+	s, _ := txMgr.NewTxSimulator("test_txid")
 	value, err := s.GetState("ns1", "key1")
 	testutil.AssertNoError(t, err, fmt.Sprintf("Error in GetState(): %s", err))
 	testutil.AssertNil(t, value)
@@ -79,7 +80,7 @@ func testTxSimulatorWithExistingData(t *testing.T, env testEnv) {
 	txMgr := env.getTxMgr()
 	txMgrHelper := newTxMgrTestHelper(t, txMgr)
 	// simulate tx1
-	s1, _ := txMgr.NewTxSimulator()
+	s1, _ := txMgr.NewTxSimulator("test_tx1")
 	s1.SetState("ns1", "key1", []byte("value1"))
 	s1.SetState("ns1", "key2", []byte("value2"))
 	s1.SetState("ns2", "key3", []byte("value3"))
@@ -90,7 +91,7 @@ func testTxSimulatorWithExistingData(t *testing.T, env testEnv) {
 	txMgrHelper.validateAndCommitRWSet(txRWSet1)
 
 	// simulate tx2 that make changes to existing data
-	s2, _ := txMgr.NewTxSimulator()
+	s2, _ := txMgr.NewTxSimulator("test_tx2")
 	value, _ := s2.GetState("ns1", "key1")
 	testutil.AssertEquals(t, value, []byte("value1"))
 	s2.SetState("ns1", "key1", []byte("value1_1"))
@@ -103,7 +104,7 @@ func testTxSimulatorWithExistingData(t *testing.T, env testEnv) {
 	txMgrHelper.validateAndCommitRWSet(txRWSet2)
 
 	// simulate tx3
-	s3, _ := txMgr.NewTxSimulator()
+	s3, _ := txMgr.NewTxSimulator("test_tx3")
 	value, _ = s3.GetState("ns1", "key1")
 	testutil.AssertEquals(t, value, []byte("value1_1"))
 	value, _ = s3.GetState("ns2", "key3")
@@ -131,7 +132,7 @@ func testTxValidation(t *testing.T, env testEnv) {
 	txMgr := env.getTxMgr()
 	txMgrHelper := newTxMgrTestHelper(t, txMgr)
 	// simulate tx1
-	s1, _ := txMgr.NewTxSimulator()
+	s1, _ := txMgr.NewTxSimulator("test_tx1")
 	s1.SetState("ns1", "key1", []byte("value1"))
 	s1.SetState("ns1", "key2", []byte("value2"))
 	s1.SetState("ns2", "key3", []byte("value3"))
@@ -143,7 +144,7 @@ func testTxValidation(t *testing.T, env testEnv) {
 
 	// simulate tx2 that make changes to existing data.
 	// tx2: Read/Update ns1:key1, Delete ns2:key3.
-	s2, _ := txMgr.NewTxSimulator()
+	s2, _ := txMgr.NewTxSimulator("test_tx2")
 	value, _ := s2.GetState("ns1", "key1")
 	testutil.AssertEquals(t, value, []byte("value1"))
 
@@ -153,28 +154,28 @@ func testTxValidation(t *testing.T, env testEnv) {
 
 	// simulate tx3 before committing tx2 changes. Reads and modifies the key changed by tx2.
 	// tx3: Read/Update ns1:key1
-	s3, _ := txMgr.NewTxSimulator()
+	s3, _ := txMgr.NewTxSimulator("test_tx3")
 	s3.GetState("ns1", "key1")
 	s3.SetState("ns1", "key1", []byte("value1_3"))
 	s3.Done()
 
 	// simulate tx4 before committing tx2 changes. Reads and Deletes the key changed by tx2
 	// tx4: Read/Delete ns2:key3
-	s4, _ := txMgr.NewTxSimulator()
+	s4, _ := txMgr.NewTxSimulator("test_tx4")
 	s4.GetState("ns2", "key3")
 	s4.DeleteState("ns2", "key3")
 	s4.Done()
 
 	// simulate tx5 before committing tx2 changes. Modifies and then Reads the key changed by tx2 and writes a new key
 	// tx5: Update/Read ns1:key1
-	s5, _ := txMgr.NewTxSimulator()
+	s5, _ := txMgr.NewTxSimulator("test_tx5")
 	s5.SetState("ns1", "key1", []byte("new_value"))
 	s5.GetState("ns1", "key1")
 	s5.Done()
 
 	// simulate tx6 before committing tx2 changes. Only writes a new key, does not reads/writes a key changed by tx2
 	// tx6: Update ns1:new_key
-	s6, _ := txMgr.NewTxSimulator()
+	s6, _ := txMgr.NewTxSimulator("test_tx6")
 	s6.SetState("ns1", "new_key", []byte("new_value"))
 	s6.Done()
 
@@ -218,7 +219,7 @@ func testTxPhantomValidation(t *testing.T, env testEnv) {
 	txMgr := env.getTxMgr()
 	txMgrHelper := newTxMgrTestHelper(t, txMgr)
 	// simulate tx1
-	s1, _ := txMgr.NewTxSimulator()
+	s1, _ := txMgr.NewTxSimulator("test_tx1")
 	s1.SetState("ns", "key1", []byte("value1"))
 	s1.SetState("ns", "key2", []byte("value2"))
 	s1.SetState("ns", "key3", []byte("value3"))
@@ -231,7 +232,7 @@ func testTxPhantomValidation(t *testing.T, env testEnv) {
 	txMgrHelper.validateAndCommitRWSet(txRWSet1)
 
 	// simulate tx2
-	s2, _ := txMgr.NewTxSimulator()
+	s2, _ := txMgr.NewTxSimulator("test_tx2")
 	itr2, _ := s2.GetStateRangeScanIterator("ns", "key2", "key5")
 	for {
 		if result, _ := itr2.Next(); result == nil {
@@ -243,7 +244,7 @@ func testTxPhantomValidation(t *testing.T, env testEnv) {
 	txRWSet2, _ := s2.GetTxSimulationResults()
 
 	// simulate tx3
-	s3, _ := txMgr.NewTxSimulator()
+	s3, _ := txMgr.NewTxSimulator("test_tx3")
 	itr3, _ := s3.GetStateRangeScanIterator("ns", "key2", "key5")
 	for {
 		if result, _ := itr3.Next(); result == nil {
@@ -255,7 +256,7 @@ func testTxPhantomValidation(t *testing.T, env testEnv) {
 	txRWSet3, _ := s3.GetTxSimulationResults()
 
 	// simulate tx4
-	s4, _ := txMgr.NewTxSimulator()
+	s4, _ := txMgr.NewTxSimulator("test_tx4")
 	itr4, _ := s4.GetStateRangeScanIterator("ns", "key4", "key6")
 	for {
 		if result, _ := itr4.Next(); result == nil {
@@ -309,7 +310,7 @@ func testIterator(t *testing.T, env testEnv, numKeys int, startKeyNum int, endKe
 	cID := "cID"
 	txMgr := env.getTxMgr()
 	txMgrHelper := newTxMgrTestHelper(t, txMgr)
-	s, _ := txMgr.NewTxSimulator()
+	s, _ := txMgr.NewTxSimulator("test_tx1")
 	for i := 1; i <= numKeys; i++ {
 		k := createTestKey(i)
 		v := createTestValue(i)
@@ -344,7 +345,7 @@ func testIterator(t *testing.T, env testEnv, numKeys int, startKeyNum int, endKe
 
 	expectedCount := end - begin
 
-	queryExecuter, _ := txMgr.NewQueryExecutor()
+	queryExecuter, _ := txMgr.NewQueryExecutor("test_tx2")
 	itr, _ := queryExecuter.GetStateRangeScanIterator(cID, startKey, endKey)
 	count := 0
 	for {
@@ -377,7 +378,7 @@ func testIteratorWithDeletes(t *testing.T, env testEnv) {
 	cID := "cID"
 	txMgr := env.getTxMgr()
 	txMgrHelper := newTxMgrTestHelper(t, txMgr)
-	s, _ := txMgr.NewTxSimulator()
+	s, _ := txMgr.NewTxSimulator("test_tx1")
 	for i := 1; i <= 10; i++ {
 		k := createTestKey(i)
 		v := createTestValue(i)
@@ -389,14 +390,14 @@ func testIteratorWithDeletes(t *testing.T, env testEnv) {
 	txRWSet1, _ := s.GetTxSimulationResults()
 	txMgrHelper.validateAndCommitRWSet(txRWSet1)
 
-	s, _ = txMgr.NewTxSimulator()
+	s, _ = txMgr.NewTxSimulator("test_tx2")
 	s.DeleteState(cID, createTestKey(4))
 	s.Done()
 	// validate and commit RWset
 	txRWSet2, _ := s.GetTxSimulationResults()
 	txMgrHelper.validateAndCommitRWSet(txRWSet2)
 
-	queryExecuter, _ := txMgr.NewQueryExecutor()
+	queryExecuter, _ := txMgr.NewQueryExecutor("test_tx3")
 	itr, _ := queryExecuter.GetStateRangeScanIterator(cID, createTestKey(3), createTestKey(6))
 	defer itr.Close()
 	kv, _ := itr.Next()
@@ -421,7 +422,7 @@ func testTxValidationWithItr(t *testing.T, env testEnv) {
 	txMgrHelper := newTxMgrTestHelper(t, txMgr)
 
 	// simulate tx1
-	s1, _ := txMgr.NewTxSimulator()
+	s1, _ := txMgr.NewTxSimulator("test_tx1")
 	for i := 1; i <= 10; i++ {
 		k := createTestKey(i)
 		v := createTestValue(i)
@@ -434,7 +435,7 @@ func testTxValidationWithItr(t *testing.T, env testEnv) {
 	txMgrHelper.validateAndCommitRWSet(txRWSet1)
 
 	// simulate tx2 that reads key_001 and key_002
-	s2, _ := txMgr.NewTxSimulator()
+	s2, _ := txMgr.NewTxSimulator("test_tx2")
 	itr, _ := s2.GetStateRangeScanIterator(cID, createTestKey(1), createTestKey(5))
 	// read key_001 and key_002
 	itr.Next()
@@ -443,7 +444,7 @@ func testTxValidationWithItr(t *testing.T, env testEnv) {
 	s2.Done()
 
 	// simulate tx3 that reads key_004 and key_005
-	s3, _ := txMgr.NewTxSimulator()
+	s3, _ := txMgr.NewTxSimulator("test_tx3")
 	itr, _ = s3.GetStateRangeScanIterator(cID, createTestKey(4), createTestKey(6))
 	// read key_001 and key_002
 	itr.Next()
@@ -452,7 +453,7 @@ func testTxValidationWithItr(t *testing.T, env testEnv) {
 	s3.Done()
 
 	// simulate tx4 before committing tx2 and tx3. Modifies a key read by tx3
-	s4, _ := txMgr.NewTxSimulator()
+	s4, _ := txMgr.NewTxSimulator("test_tx4")
 	s4.DeleteState(cID, createTestKey(5))
 	s4.Done()
 
@@ -485,7 +486,7 @@ func testGetSetMultipeKeys(t *testing.T, env testEnv) {
 	txMgr := env.getTxMgr()
 	txMgrHelper := newTxMgrTestHelper(t, txMgr)
 	// simulate tx1
-	s1, _ := txMgr.NewTxSimulator()
+	s1, _ := txMgr.NewTxSimulator("test_tx1")
 	multipleKeyMap := make(map[string][]byte)
 	for i := 1; i <= 10; i++ {
 		k := createTestKey(i)
@@ -497,7 +498,7 @@ func testGetSetMultipeKeys(t *testing.T, env testEnv) {
 	// validate and commit RWset
 	txRWSet, _ := s1.GetTxSimulationResults()
 	txMgrHelper.validateAndCommitRWSet(txRWSet)
-	qe, _ := txMgr.NewQueryExecutor()
+	qe, _ := txMgr.NewQueryExecutor("test_tx2")
 	defer qe.Done()
 	multipleKeys := []string{}
 	for k := range multipleKeyMap {
@@ -509,7 +510,7 @@ func testGetSetMultipeKeys(t *testing.T, env testEnv) {
 		testutil.AssertEquals(t, v, multipleKeyMap[multipleKeys[i]])
 	}
 
-	s2, _ := txMgr.NewTxSimulator()
+	s2, _ := txMgr.NewTxSimulator("test_tx3")
 	defer s2.Done()
 	values, _ = s2.GetStateMultipleKeys(cID, multipleKeys[5:7])
 	testutil.AssertEquals(t, len(values), 2)
@@ -558,7 +559,7 @@ func testExecuteQuery(t *testing.T, env testEnv) {
 	txMgr := env.getTxMgr()
 	txMgrHelper := newTxMgrTestHelper(t, txMgr)
 
-	s1, _ := txMgr.NewTxSimulator()
+	s1, _ := txMgr.NewTxSimulator("test_tx1")
 
 	s1.SetState("ns1", "key1", []byte("value1"))
 	s1.SetState("ns1", "key2", []byte("value2"))
@@ -582,7 +583,7 @@ func testExecuteQuery(t *testing.T, env testEnv) {
 	txRWSet, _ := s1.GetTxSimulationResults()
 	txMgrHelper.validateAndCommitRWSet(txRWSet)
 
-	queryExecuter, _ := txMgr.NewQueryExecutor()
+	queryExecuter, _ := txMgr.NewQueryExecutor("test_tx2")
 	queryString := "{\"selector\":{\"owner\": {\"$eq\": \"bob\"}},\"limit\": 10,\"skip\": 0}"
 
 	itr, err := queryExecuter.ExecuteQuery("ns1", queryString)
@@ -610,7 +611,7 @@ func TestValidateKey(t *testing.T) {
 	for _, testEnv := range testEnvs {
 		testLedgerID := "test.validate.key"
 		testEnv.init(t, testLedgerID)
-		txSimulator, _ := testEnv.getTxMgr().NewTxSimulator()
+		txSimulator, _ := testEnv.getTxMgr().NewTxSimulator("test_tx1")
 		err := txSimulator.SetState("ns1", nonUTF8Key, dummyValue)
 		if testEnv.getName() == levelDBtestEnvName {
 			testutil.AssertNoError(t, err, "")

@@ -77,8 +77,8 @@ func NewCommonStorageDB(vdb statedb.VersionedDB, ledgerid string) (DB, error) {
 	return &CommonStorageDB{VersionedDB: vdb}, nil
 }
 
-// GetPrivateState implements corresponding function in interface PrivacyAwareVersionedDB
-func (s *CommonStorageDB) GetPrivateState(namespace, collection, key string) (*statedb.VersionedValue, error) {
+// GetPrivateData implements corresponding function in interface PrivacyAwareVersionedDB
+func (s *CommonStorageDB) GetPrivateData(namespace, collection, key string) (*statedb.VersionedValue, error) {
 	return s.GetState(derivePvtDataNs(namespace, collection), key)
 }
 
@@ -91,15 +91,26 @@ func (s *CommonStorageDB) GetValueHash(namespace, collection string, keyHash []b
 	return s.GetState(deriveHashedDataNs(namespace, collection), keyHashStr)
 }
 
-// GetPrivateStateMultipleKeys implements corresponding function in interface PrivacyAwareVersionedDB
-func (s *CommonStorageDB) GetPrivateStateMultipleKeys(namespace, collection string, keys []string) ([]*statedb.VersionedValue, error) {
+// GetPrivateDataMultipleKeys implements corresponding function in interface PrivacyAwareVersionedDB
+func (s *CommonStorageDB) GetPrivateDataMultipleKeys(namespace, collection string, keys []string) ([]*statedb.VersionedValue, error) {
 	return s.GetStateMultipleKeys(derivePvtDataNs(namespace, collection), keys)
 }
 
-// GetPrivateStateRangeScanIterator implements corresponding function in interface PrivacyAwareVersionedDB
-func (s *CommonStorageDB) GetPrivateStateRangeScanIterator(namespace, collection, startKey, endKey string) (statedb.ResultsIterator, error) {
+// GetPrivateDataRangeScanIterator implements corresponding function in interface PrivacyAwareVersionedDB
+func (s *CommonStorageDB) GetPrivateDataRangeScanIterator(namespace, collection, startKey, endKey string) (statedb.ResultsIterator, error) {
 	return s.GetStateRangeScanIterator(derivePvtDataNs(namespace, collection), startKey, endKey)
 }
+
+// ExecuteQueryOnPrivateData implements corresponding function in interface PrivacyAwareVersionedDB
+func (s CommonStorageDB) ExecuteQueryOnPrivateData(namespace, collection, query string) (statedb.ResultsIterator, error) {
+	return s.ExecuteQuery(derivePvtDataNs(namespace, collection), query)
+}
+
+// ApplyUpdates overrides the funciton in statedb.VersionedDB and throws appropriate message
+// TODO uncomment the following when integration of new code is done
+// func (s *CommonStorageDB) ApplyUpdates(batch *statedb.UpdateBatch, height *version.Height) error {
+// 	return fmt.Errorf("This function should not be invoked. Please invoke function 'ApplyPubPvtAndHashUpdates'")
+// }
 
 // ApplyPubPvtAndHashUpdates implements corresponding function in interface PrivacyAwareVersionedDB
 func (s *CommonStorageDB) ApplyPubPvtAndHashUpdates(

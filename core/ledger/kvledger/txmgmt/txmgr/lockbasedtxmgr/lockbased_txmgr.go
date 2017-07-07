@@ -21,6 +21,7 @@ import (
 
 	"github.com/hyperledger/fabric/common/flogging"
 	"github.com/hyperledger/fabric/core/ledger"
+	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/privacyenabledstate"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/statedb"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/validator"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/validator/statebasedval"
@@ -33,7 +34,7 @@ var logger = flogging.MustGetLogger("lockbasedtxmgr")
 // LockBasedTxMgr a simple implementation of interface `txmgmt.TxMgr`.
 // This implementation uses a read-write lock to prevent conflicts between transaction simulation and committing
 type LockBasedTxMgr struct {
-	db           statedb.VersionedDB
+	db           privacyenabledstate.DB
 	validator    validator.Validator
 	batch        *statedb.UpdateBatch
 	currentBlock *common.Block
@@ -41,7 +42,7 @@ type LockBasedTxMgr struct {
 }
 
 // NewLockBasedTxMgr constructs a new instance of NewLockBasedTxMgr
-func NewLockBasedTxMgr(db statedb.VersionedDB) *LockBasedTxMgr {
+func NewLockBasedTxMgr(db privacyenabledstate.DB) *LockBasedTxMgr {
 	db.Open()
 	return &LockBasedTxMgr{db: db, validator: statebasedval.NewValidator(db)}
 }
@@ -53,16 +54,16 @@ func (txmgr *LockBasedTxMgr) GetLastSavepoint() (*version.Height, error) {
 }
 
 // NewQueryExecutor implements method in interface `txmgmt.TxMgr`
-func (txmgr *LockBasedTxMgr) NewQueryExecutor() (ledger.QueryExecutor, error) {
-	qe := newQueryExecutor(txmgr)
+func (txmgr *LockBasedTxMgr) NewQueryExecutor(txid string) (ledger.QueryExecutor, error) {
+	qe := newQueryExecutor(txmgr, txid)
 	txmgr.commitRWLock.RLock()
 	return qe, nil
 }
 
 // NewTxSimulator implements method in interface `txmgmt.TxMgr`
-func (txmgr *LockBasedTxMgr) NewTxSimulator() (ledger.TxSimulator, error) {
+func (txmgr *LockBasedTxMgr) NewTxSimulator(txid string) (ledger.TxSimulator, error) {
 	logger.Debugf("constructing new tx simulator")
-	s := newLockBasedTxSimulator(txmgr)
+	s := newLockBasedTxSimulator(txmgr, txid)
 	txmgr.commitRWLock.RLock()
 	return s, nil
 }
