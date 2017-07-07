@@ -22,19 +22,22 @@ import (
 	"github.com/hyperledger/fabric/common/ledger/util"
 )
 
-var compositeKeySep = []byte{0x00}
+var (
+	prwsetPrefix     = []byte("P")[0] // key prefix for storing private read-write set in transient store.
+	purgeIndexPrefix = []byte("I")[0] // key prefix for storing index on private read-write set using endorsement block height.
+	compositeKeySep  = byte(0x00)
+)
 
 // createCompositeKeyForPRWSet creates a key for storing private read-write set
-// in the transient store. The structure of the key is namespace~transactionId~endorserId.
-func createCompositeKeyForPRWSet(ns string, txId string, endorserId string, endorsementBlkHt uint64) []byte {
+// in the transient store. The structure of the key is <prwsetPrefix>~txid~endorserid~endorsementBlkHt.
+func createCompositeKeyForPRWSet(txid string, endorserid string, endorsementBlkHt uint64) []byte {
 	var compositeKey []byte
-
-	compositeKey = append(compositeKey, []byte(ns)...)
-	compositeKey = append(compositeKey, compositeKeySep...)
-	compositeKey = append(compositeKey, []byte(txId)...)
-	compositeKey = append(compositeKey, compositeKeySep...)
-	compositeKey = append(compositeKey, []byte(endorserId)...)
-	compositeKey = append(compositeKey, compositeKeySep...)
+	compositeKey = append(compositeKey, prwsetPrefix)
+	compositeKey = append(compositeKey, compositeKeySep)
+	compositeKey = append(compositeKey, []byte(txid)...)
+	compositeKey = append(compositeKey, compositeKeySep)
+	compositeKey = append(compositeKey, []byte(endorserid)...)
+	compositeKey = append(compositeKey, compositeKeySep)
 	compositeKey = append(compositeKey, util.EncodeOrderPreservingVarUint64(endorsementBlkHt)...)
 
 	return compositeKey
@@ -42,77 +45,78 @@ func createCompositeKeyForPRWSet(ns string, txId string, endorserId string, endo
 
 // createCompositeKeyForPurgeIndex creates a key to index private read-write set based on
 // endorsement block height such that purge based on block height can be achieved. The structure
-// of the key is namespace~endorsementBlkHt~txId~endorserId.
-func createCompositeKeyForPurgeIndex(ns string, endorsementBlkHt uint64, txId string, endorserId string) []byte {
+// of the key is <purgeIndexPrefix>~endorsementBlkHt~txid~endorserid.
+func createCompositeKeyForPurgeIndex(endorsementBlkHt uint64, txid string, endorserid string) []byte {
 	var compositeKey []byte
-
-	compositeKey = append(compositeKey, []byte(ns)...)
-	compositeKey = append(compositeKey, compositeKeySep...)
+	compositeKey = append(compositeKey, purgeIndexPrefix)
+	compositeKey = append(compositeKey, compositeKeySep)
 	compositeKey = append(compositeKey, util.EncodeOrderPreservingVarUint64(endorsementBlkHt)...)
-	compositeKey = append(compositeKey, compositeKeySep...)
-	compositeKey = append(compositeKey, []byte(txId)...)
-	compositeKey = append(compositeKey, compositeKeySep...)
-	compositeKey = append(compositeKey, []byte(endorserId)...)
+	compositeKey = append(compositeKey, compositeKeySep)
+	compositeKey = append(compositeKey, []byte(txid)...)
+	compositeKey = append(compositeKey, compositeKeySep)
+	compositeKey = append(compositeKey, []byte(endorserid)...)
 
 	return compositeKey
 }
 
-// splitCompositeKeyOfPRWSet splits the compositeKey into endorserId and endorsementBlkHt.
-func splitCompositeKeyOfPRWSet(compositeKey []byte) (endorserId string, endorsementBlkHt uint64) {
-	splits := bytes.Split(compositeKey, compositeKeySep)
-	// splits[0] is the namesapce & splits[1] is the txId: Ignored as they are not required currently.
-	endorserId = string(splits[2])
-	endorsementBlkHt, _ = util.DecodeOrderPreservingVarUint64(splits[3])
-	return endorserId, endorsementBlkHt
+// splitCompositeKeyOfPRWSet splits the compositeKey (<prwsetPrefix>~txid~endorserid~endorsementBlkHt) into endorserId and endorsementBlkHt.
+func splitCompositeKeyOfPRWSet(compositeKey []byte) (endorserid string, endorsementBlkHt uint64) {
+	compositeKey = compositeKey[2:]
+	firstSepIndex := bytes.IndexByte(compositeKey, compositeKeySep)
+	secondSepIndex := firstSepIndex + bytes.IndexByte(compositeKey[firstSepIndex+1:], compositeKeySep) + 1
+	endorserid = string(compositeKey[firstSepIndex+1 : secondSepIndex])
+	endorsementBlkHt, _ = util.DecodeOrderPreservingVarUint64(compositeKey[secondSepIndex+1:])
+	return endorserid, endorsementBlkHt
 }
 
-// splitCompositeKeyOfPurgeIndex splits the compositeKey into txId, endorserId and endorsementBlkHt.
-func splitCompositeKeyOfPurgeIndex(compositeKey []byte) (txId string, endorserId string, endorsementBlkHt uint64) {
-	splits := bytes.Split(compositeKey, compositeKeySep)
-	// splits[0] is the namesapce: Ignored as it is not required currently.
-	endorsementBlkHt, _ = util.DecodeOrderPreservingVarUint64(splits[1])
-	txId = string(splits[2])
-	endorserId = string(splits[3])
-	return txId, endorserId, endorsementBlkHt
+// splitCompositeKeyOfPurgeIndex splits the compositeKey (<purgeIndexPrefix>~endorsementBlkHt~txid~endorserid) into txid, endorserid and endorsementBlkHt.
+func splitCompositeKeyOfPurgeIndex(compositeKey []byte) (txid string, endorserid string, endorsementBlkHt uint64) {
+	var n int
+	endorsementBlkHt, n = util.DecodeOrderPreservingVarUint64(compositeKey[2:])
+	splits := bytes.Split(compositeKey[n+3:], []byte{compositeKeySep})
+	txid = string(splits[0])
+	endorserid = string(splits[1])
+	return
 }
 
-// createTxIdRangeStartKey returns a startKey to do a range query on transient store using txId
-func createTxIdRangeStartKey(prefix string, txId string) []byte {
+// createTxidRangeStartKey returns a startKey to do a range query on transient store using txid
+func createTxidRangeStartKey(txid string) []byte {
 	var startKey []byte
-	startKey = append(startKey, []byte(prefix)...)
-	startKey = append(startKey, compositeKeySep...)
-	startKey = append(startKey, []byte(txId)...)
-	startKey = append(startKey, compositeKeySep...)
+	startKey = append(startKey, prwsetPrefix)
+	startKey = append(startKey, compositeKeySep)
+	startKey = append(startKey, []byte(txid)...)
+	startKey = append(startKey, compositeKeySep)
 	return startKey
 }
 
-// createTxIdRangeStartKey returns a endKey to do a range query on transient store using txId
-func createTxIdRangeEndKey(prefix string, txId string) []byte {
+// createTxidRangeEndKey returns a endKey to do a range query on transient store using txid
+func createTxidRangeEndKey(txid string) []byte {
 	var endKey []byte
-	endKey = append(endKey, []byte(prefix)...)
-	endKey = append(endKey, compositeKeySep...)
-	endKey = append(endKey, []byte(txId)...)
-	endKey = append(endKey, []byte{0xff}...)
+	endKey = append(endKey, prwsetPrefix)
+	endKey = append(endKey, compositeKeySep)
+	endKey = append(endKey, []byte(txid)...)
+	endKey = append(endKey, byte(0xff))
 	return endKey
 }
 
 // createEndorsementBlkHtRangeStartKey returns a startKey to do a range query on index stored in transient store
 // using endorsementBlkHt
-func createEndorsementBlkHtRangeStartKey(prefix string, endorsementBlkHt uint64) []byte {
+func createEndorsementBlkHtRangeStartKey(endorsementBlkHt uint64) []byte {
 	var startKey []byte
-	startKey = append(startKey, []byte(prefix)...)
-	startKey = append(startKey, compositeKeySep...)
+	startKey = append(startKey, purgeIndexPrefix)
+	startKey = append(startKey, compositeKeySep)
 	startKey = append(startKey, util.EncodeOrderPreservingVarUint64(endorsementBlkHt)...)
+	startKey = append(startKey, compositeKeySep)
 	return startKey
 }
 
 // createEndorsementBlkHtRangeStartKey returns a endKey to do a range query on index stored in transient store
 // using endorsementBlkHt
-func createEndorsementBlkHtRangeEndKey(prefix string, endorsementBlkHt uint64) []byte {
+func createEndorsementBlkHtRangeEndKey(endorsementBlkHt uint64) []byte {
 	var endKey []byte
-	endKey = append(endKey, []byte(prefix)...)
-	endKey = append(endKey, compositeKeySep...)
+	endKey = append(endKey, purgeIndexPrefix)
+	endKey = append(endKey, compositeKeySep)
 	endKey = append(endKey, util.EncodeOrderPreservingVarUint64(endorsementBlkHt)...)
-	endKey = append(endKey, []byte{0xff}...)
+	endKey = append(endKey, byte(0xff))
 	return endKey
 }

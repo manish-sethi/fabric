@@ -32,10 +32,11 @@ type DBProvider interface {
 // DB extends VersionedDB interface. This interface provides additional functions for managing private data state
 type DB interface {
 	statedb.VersionedDB
-	GetPrivateState(namespace, collection, key string) (*statedb.VersionedValue, error)
+	GetPrivateData(namespace, collection, key string) (*statedb.VersionedValue, error)
 	GetValueHash(namespace, collection string, keyHash []byte) (*statedb.VersionedValue, error)
-	GetPrivateStateMultipleKeys(namespace, collection string, keys []string) ([]*statedb.VersionedValue, error)
-	GetPrivateStateRangeScanIterator(namespace, collection, startKey, endKey string) (statedb.ResultsIterator, error)
+	GetPrivateDataMultipleKeys(namespace, collection string, keys []string) ([]*statedb.VersionedValue, error)
+	GetPrivateDataRangeScanIterator(namespace, collection, startKey, endKey string) (statedb.ResultsIterator, error)
+	ExecuteQueryOnPrivateData(namespace, collection, query string) (statedb.ResultsIterator, error)
 	ApplyPubPvtAndHashUpdates(pubDataBatch *statedb.UpdateBatch, pvtDataBatch PvtDataBatch, hashedDataBatch PvtDataBatch, height *version.Height) error
 }
 

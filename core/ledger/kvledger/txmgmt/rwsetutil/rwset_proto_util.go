@@ -98,6 +98,31 @@ func (txRwSet *TxRwSet) FromProtoBytes(protoBytes []byte) error {
 	return nil
 }
 
+// ToProtoBytes constructs TxReadWriteSet proto message and serializes using protobuf Marshal
+func (txPvtRwSet *TxPvtRwSet) ToProtoBytes() ([]byte, error) {
+	var protoMsg *rwset.TxPvtReadWriteSet
+	var err error
+	if protoMsg, err = txPvtRwSet.toProtoMsg(); err != nil {
+		return nil, err
+	}
+	return proto.Marshal(protoMsg)
+}
+
+// FromProtoBytes deserializes protobytes into TxReadWriteSet proto message and populates 'TxRwSet'
+func (txPvtRwSet *TxPvtRwSet) FromProtoBytes(protoBytes []byte) error {
+	protoMsg := &rwset.TxPvtReadWriteSet{}
+	var err error
+	var txPvtRwSetTemp *TxPvtRwSet
+	if err = proto.Unmarshal(protoBytes, protoMsg); err != nil {
+		return err
+	}
+	if txPvtRwSetTemp, err = txPvtRwSetFromProtoMsg(protoMsg); err != nil {
+		return err
+	}
+	txPvtRwSet.NsPvtRwSet = txPvtRwSetTemp.NsPvtRwSet
+	return nil
+}
+
 func (txRwSet *TxRwSet) toProtoMsg() (*rwset.TxReadWriteSet, error) {
 	protoMsg := &rwset.TxReadWriteSet{DataModel: rwset.TxReadWriteSet_KV}
 	var nsRwSetProtoMsg *rwset.NsReadWriteSet

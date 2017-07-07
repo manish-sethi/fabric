@@ -17,7 +17,6 @@ limitations under the License.
 package kvledger
 
 import (
-	"errors"
 	"fmt"
 	"strconv"
 	"testing"
@@ -25,6 +24,7 @@ import (
 	commonledger "github.com/hyperledger/fabric/common/ledger"
 	"github.com/hyperledger/fabric/common/ledger/testutil"
 	lgr "github.com/hyperledger/fabric/core/ledger"
+	"github.com/hyperledger/fabric/core/ledger/kvledger/pvtrwstorage"
 	"github.com/hyperledger/fabric/core/ledger/ledgerconfig"
 	ledgertestutil "github.com/hyperledger/fabric/core/ledger/testutil"
 	"github.com/hyperledger/fabric/protos/common"
@@ -574,12 +574,12 @@ func TestKVLedgerTransientStore(t *testing.T) {
 	// TEST PutPrivateSimulationResults()
 
 	// Simulation results produced by endorser 0
-	txId := "tx-1"
+	txID := "tx-1"
 	endorser0 := "endorser0"
 	resultE0 := []byte("results")
 
 	// Persist simulation results into transient store
-	err := ledger.PutPrivateSimulationResults(txId, endorser0, bcInfo.Height, resultE0)
+	err := ledger.PutPrivateSimulationResults(txID, endorser0, bcInfo.Height, resultE0)
 	testutil.AssertNoError(t, err, "Error upon PutPrivateSimulationResults")
 
 	// Simulation results produced by endorser 1
@@ -587,12 +587,12 @@ func TestKVLedgerTransientStore(t *testing.T) {
 	resultE1 := []byte("results")
 
 	// Persist simulation results into transient store
-	err = ledger.PutPrivateSimulationResults(txId, endorser1, bcInfo.Height, resultE1)
+	err = ledger.PutPrivateSimulationResults(txID, endorser1, bcInfo.Height, resultE1)
 	testutil.AssertNoError(t, err, "Error upon PutPrivateSimulationResults")
 
 	// TEST GetPrivateSimulationResults()
 
-	iter, err := ledger.GetPrivateSimulationResults(txId)
+	iter, err := ledger.GetPrivateSimulationResults(txID)
 	testutil.AssertNoError(t, err, "Error upon GetPrivateSimulationResults")
 
 	// Expected Simulation Results from GetPrivateSimulationResults()
@@ -648,7 +648,7 @@ func TestKVLedgerTransientStore(t *testing.T) {
 	resultE2 := []byte("results")
 
 	// Persist simulation results into transient store
-	err = ledger.PutPrivateSimulationResults(txId, endorser2, bcInfo.Height, resultE2)
+	err = ledger.PutPrivateSimulationResults(txID, endorser2, bcInfo.Height, resultE2)
 	testutil.AssertNoError(t, err, "Error upon PutPrivateSimulationResults")
 
 	var minBlockToRetain uint64
@@ -675,7 +675,7 @@ func TestKVLedgerTransientStore(t *testing.T) {
 	testutil.AssertEquals(t, minBlockToRetain, minBlockRetained)
 
 	// Call GetPrivateSimulationResults() to verify only endorser 2 results exist
-	iter, err = ledger.GetPrivateSimulationResults(txId)
+	iter, err = ledger.GetPrivateSimulationResults(txID)
 	testutil.AssertNoError(t, err, "Error upon GetPrivateSimulationResults")
 
 	expectedEndorsersResults = nil
@@ -707,5 +707,5 @@ func TestKVLedgerTransientStore(t *testing.T) {
 
 	// Check the minimum height from the retained endorsement results
 	minBlockRetained, err = ledger.TransientDataMinBlockNum()
-	testutil.AssertEquals(t, err, errors.New("Transient store is empty"))
+	testutil.AssertEquals(t, err, pvtrwstorage.ErrTransientStoreEmpty)
 }

@@ -30,21 +30,21 @@ type transientStoreEnv struct {
 	testTransientStore         TransientStore
 }
 
-func NewTestTransientStoreEnv(t *testing.T) *transientStoreEnv {
+func newTestTransientStoreEnv(t *testing.T) *transientStoreEnv {
+	removeTransientStorePath(t)
 	assert := assert.New(t)
 	testTransientStoreProvider := NewTransientStoreProvider()
 	testTransientStore, err := testTransientStoreProvider.OpenStore("TestTransientStore")
 	assert.NoError(err)
-
 	return &transientStoreEnv{t, testTransientStoreProvider, testTransientStore}
 }
 
 func (env *transientStoreEnv) cleanup() {
 	env.testTransientStoreProvider.Close()
-	removeTransientStorePath(env.t, "Cleanup")
+	removeTransientStorePath(env.t)
 }
 
-func removeTransientStorePath(t testing.TB, caller string) {
+func removeTransientStorePath(t testing.TB) {
 	dbPath := ledgerconfig.GetTransientStorePath()
 	if err := os.RemoveAll(dbPath); err != nil {
 		t.Fatalf("Err: %s", err)
