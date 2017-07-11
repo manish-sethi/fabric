@@ -24,8 +24,8 @@ import (
 
 // TxMgr - an interface that a transaction manager should implement
 type TxMgr interface {
-	NewQueryExecutor() (ledger.QueryExecutor, error)
-	NewTxSimulator() (ledger.TxSimulator, error)
+	NewQueryExecutor(txid string) (ledger.QueryExecutor, error)
+	NewTxSimulator(txid string) (ledger.TxSimulator, error)
 	ValidateAndPrepare(block *common.Block, doMVCCValidation bool) error
 	GetLastSavepoint() (*version.Height, error)
 	ShouldRecover(lastAvailableBlock uint64) (bool, uint64, error)

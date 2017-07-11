@@ -19,7 +19,6 @@ package lockbasedtxmgr
 import (
 	"errors"
 
-	"github.com/hyperledger/fabric/common/util"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/rwsetutil"
 )
 
@@ -29,12 +28,11 @@ type lockBasedTxSimulator struct {
 	rwsetBuilder *rwsetutil.RWSetBuilder
 }
 
-func newLockBasedTxSimulator(txmgr *LockBasedTxMgr) *lockBasedTxSimulator {
+func newLockBasedTxSimulator(txmgr *LockBasedTxMgr, txid string) *lockBasedTxSimulator {
 	rwsetBuilder := rwsetutil.NewRWSetBuilder()
 	helper := &queryHelper{txmgr: txmgr, rwsetBuilder: rwsetBuilder}
-	id := util.GenerateUUID()
-	logger.Debugf("constructing new tx simulator [%s]", id)
-	return &lockBasedTxSimulator{lockBasedQueryExecutor{helper, id}, rwsetBuilder}
+	logger.Debugf("constructing new tx simulator txid = [%s]", txid)
+	return &lockBasedTxSimulator{lockBasedQueryExecutor{helper, txid}, rwsetBuilder}
 }
 
 // GetState implements method in interface `ledger.TxSimulator`
@@ -67,6 +65,46 @@ func (s *lockBasedTxSimulator) SetStateMultipleKeys(namespace string, kvs map[st
 	return nil
 }
 
+// SetPrivateData implements method in interface `ledger.PrivacyEnabledTxSimulator`
+func (s *lockBasedTxSimulator) SetPrivateData(ns, coll, key string, value []byte) error {
+	s.helper.checkDone()
+	if err := s.helper.txmgr.db.ValidateKey(key); err != nil {
+		return err
+	}
+	return s.rwsetBuilder.AddToPvtAndHashedWriteSet(ns, coll, key, value)
+}
+
+// CreatePrivateData implements method in interface `ledger.PrivacyEnabledTxSimulator`
+func (s *lockBasedTxSimulator) CreatePrivateData(ns, coll, key string, value []byte) error {
+	if _, err := s.GetPrivateData(ns, coll, key); err != nil {
+		return err
+	}
+	return s.SetPrivateData(ns, coll, key, value)
+}
+
+// DeletePrivateData implements method in interface `ledger.PrivacyEnabledTxSimulator`
+func (s *lockBasedTxSimulator) DeletePrivateData(ns, coll, key string) error {
+	return s.SetPrivateData(ns, coll, key, nil)
+}
+
+// RemovePrivateData implements method in interface `ledger.PrivacyEnabledTxSimulator`
+func (s *lockBasedTxSimulator) RemovePrivateData(ns, coll, key string) error {
+	if _, err := s.GetPrivateData(ns, coll, key); err != nil {
+		return err
+	}
+	return s.DeletePrivateData(ns, coll, key)
+}
+
+// SetPrivateDataMultipleKeys implements method in interface `ledger.PrivacyEnabledTxSimulator`
+func (s *lockBasedTxSimulator) SetPrivateDataMultipleKeys(ns, coll string, kvs map[string][]byte) error {
+	for k, v := range kvs {
+		if err := s.SetPrivateData(ns, coll, k, v); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // GetTxSimulationResults implements method in interface `ledger.TxSimulator`
 func (s *lockBasedTxSimulator) GetTxSimulationResults() ([]byte, error) {
 	logger.Debugf("Simulation completed, getting simulation results")
@@ -74,7 +112,10 @@ func (s *lockBasedTxSimulator) GetTxSimulationResults() ([]byte, error) {
 	if s.helper.err != nil {
 		return nil, s.helper.err
 	}
-	return s.rwsetBuilder.GetTxReadWriteSet().ToProtoBytes()
+
+	txRwSet := s.rwsetBuilder.GetTxReadWriteSet()
+
+	return txRwSet.ToProtoBytes()
 }
 
 // ExecuteUpdate implements method in interface `ledger.TxSimulator`
