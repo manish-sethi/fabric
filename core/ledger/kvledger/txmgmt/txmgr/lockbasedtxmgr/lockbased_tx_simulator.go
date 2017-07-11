@@ -19,6 +19,7 @@ package lockbasedtxmgr
 import (
 	"errors"
 
+	"github.com/hyperledger/fabric/core/ledger"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/rwsetutil"
 )
 
@@ -74,25 +75,9 @@ func (s *lockBasedTxSimulator) SetPrivateData(ns, coll, key string, value []byte
 	return s.rwsetBuilder.AddToPvtAndHashedWriteSet(ns, coll, key, value)
 }
 
-// CreatePrivateData implements method in interface `ledger.PrivacyEnabledTxSimulator`
-func (s *lockBasedTxSimulator) CreatePrivateData(ns, coll, key string, value []byte) error {
-	if _, err := s.GetPrivateData(ns, coll, key); err != nil {
-		return err
-	}
-	return s.SetPrivateData(ns, coll, key, value)
-}
-
 // DeletePrivateData implements method in interface `ledger.PrivacyEnabledTxSimulator`
 func (s *lockBasedTxSimulator) DeletePrivateData(ns, coll, key string) error {
 	return s.SetPrivateData(ns, coll, key, nil)
-}
-
-// RemovePrivateData implements method in interface `ledger.PrivacyEnabledTxSimulator`
-func (s *lockBasedTxSimulator) RemovePrivateData(ns, coll, key string) error {
-	if _, err := s.GetPrivateData(ns, coll, key); err != nil {
-		return err
-	}
-	return s.DeletePrivateData(ns, coll, key)
 }
 
 // SetPrivateDataMultipleKeys implements method in interface `ledger.PrivacyEnabledTxSimulator`
@@ -106,16 +91,28 @@ func (s *lockBasedTxSimulator) SetPrivateDataMultipleKeys(ns, coll string, kvs m
 }
 
 // GetTxSimulationResults implements method in interface `ledger.TxSimulator`
-func (s *lockBasedTxSimulator) GetTxSimulationResults() ([]byte, error) {
+func (s *lockBasedTxSimulator) GetTxSimulationResults() (*ledger.TxSimulationResults, error) {
 	logger.Debugf("Simulation completed, getting simulation results")
 	s.Done()
 	if s.helper.err != nil {
 		return nil, s.helper.err
 	}
-
 	txRwSet := s.rwsetBuilder.GetTxReadWriteSet()
-
-	return txRwSet.ToProtoBytes()
+	txPvtRwSet := s.rwsetBuilder.GetTxPvtReadWriteSet()
+	pubSimulationRes, err := txRwSet.ToProtoBytes()
+	if err != nil {
+		return nil, err
+	}
+	pvtSimulationRes, err := txPvtRwSet.ToProtoBytes()
+	if err != nil {
+		return nil, err
+	}
+	return &ledger.TxSimulationResults{
+		PubDataSimulationResults: pubSimulationRes,
+		PvtDataSimulationResults: pvtSimulationRes,
+		// TODO take block height in the begining
+		SimulationBlkHt: 2,
+	}, nil
 }
 
 // ExecuteUpdate implements method in interface `ledger.TxSimulator`

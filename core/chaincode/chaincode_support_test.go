@@ -131,7 +131,11 @@ func (meqe *mockExecQuerySimulator) GetTxSimulationResults() ([]byte, error) {
 	if meqe.txsim == nil {
 		return nil, fmt.Errorf("SetState txsimulator not initialed")
 	}
-	return meqe.txsim.GetTxSimulationResults()
+	simRes, err := meqe.txsim.GetTxSimulationResults()
+	if err != nil {
+		return nil, err
+	}
+	return simRes.PubDataSimulationResults, nil
 }
 
 //initialize peer and start up. If security==enabled, login as vp

@@ -84,7 +84,7 @@ func runReadWriteClient(chain *chainmgmt.Chain, rand *rand.Rand, numTx int, wg *
 		simulator.Done()
 		sr, err := simulator.GetTxSimulationResults()
 		common.PanicOnError(err)
-		chain.SubmitTx(sr)
+		chain.SubmitTx(sr.PubDataSimulationResults)
 	}
 	wg.Done()
 }

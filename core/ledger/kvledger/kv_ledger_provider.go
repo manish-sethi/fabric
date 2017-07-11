@@ -28,9 +28,9 @@ import (
 	"github.com/hyperledger/fabric/core/ledger"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/history/historydb"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/history/historydb/historyleveldb"
-	"github.com/hyperledger/fabric/core/ledger/kvledger/pvtrwstorage"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/privacyenabledstate"
 	"github.com/hyperledger/fabric/core/ledger/ledgerconfig"
+	"github.com/hyperledger/fabric/core/ledger/pvtrwstorage"
 	"github.com/hyperledger/fabric/protos/common"
 	"github.com/hyperledger/fabric/protos/utils"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -103,7 +103,7 @@ func NewProvider() (ledger.PeerLedgerProvider, error) {
 // upon a successful ledger creation with the committed genesis block, removes the flag and add entry into
 // created ledgers list (atomically). If a crash happens in between, the 'recoverUnderConstructionLedger'
 // function is invoked before declaring the provider to be usable
-func (provider *Provider) Create(genesisBlock *common.Block) (ledger.PrivacyEnabledPeerLedger, error) {
+func (provider *Provider) Create(genesisBlock *common.Block) (ledger.PeerLedger, error) {
 	ledgerID, err := utils.GetChainIDFromBlock(genesisBlock)
 	if err != nil {
 		return nil, err
@@ -134,7 +134,7 @@ func (provider *Provider) Create(genesisBlock *common.Block) (ledger.PrivacyEnab
 }
 
 // Open implements the corresponding method from interface ledger.PeerLedgerProvider
-func (provider *Provider) Open(ledgerID string) (ledger.PrivacyEnabledPeerLedger, error) {
+func (provider *Provider) Open(ledgerID string) (ledger.PeerLedger, error) {
 	logger.Debugf("Open() opening kvledger: %s", ledgerID)
 	// Check the ID store to ensure that the chainId/ledgerId exists
 	exists, err := provider.idStore.ledgerIDExists(ledgerID)
@@ -147,7 +147,7 @@ func (provider *Provider) Open(ledgerID string) (ledger.PrivacyEnabledPeerLedger
 	return provider.openInternal(ledgerID)
 }
 
-func (provider *Provider) openInternal(ledgerID string) (ledger.PrivacyEnabledPeerLedger, error) {
+func (provider *Provider) openInternal(ledgerID string) (ledger.PeerLedger, error) {
 	// Get the block store for a chain/ledger
 	blockStore, err := provider.blockStoreProvider.OpenBlockStore(ledgerID)
 	if err != nil {
