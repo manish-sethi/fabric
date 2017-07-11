@@ -119,7 +119,7 @@ func putCCInfoWithVSCCAndVer(theLedger ledger.PeerLedger, ccname, vscc, ver stri
 
 	simRes, err := simulator.GetTxSimulationResults()
 	assert.NoError(t, err)
-	block0 := testutil.ConstructBlock(t, 1, []byte("hash"), [][]byte{simRes}, true)
+	block0 := testutil.ConstructBlock(t, 1, []byte("hash"), [][]byte{simRes.PubDataSimulationResults}, true)
 	err = theLedger.Commit(block0)
 	assert.NoError(t, err)
 }

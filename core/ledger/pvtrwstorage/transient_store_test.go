@@ -85,7 +85,7 @@ func TestTransientStorePersistAndRetrieve(t *testing.T) {
 
 	// Results produced by endorser 1
 	endorser0SimulationResults := &ledger.EndorserPrivateSimulationResults{
-		EndorserId:               "endorser0",
+		EndorserID:               "endorser0",
 		EndorsementBlockHeight:   10,
 		PrivateSimulationResults: []byte("results"),
 	}
@@ -93,7 +93,7 @@ func TestTransientStorePersistAndRetrieve(t *testing.T) {
 
 	// Results produced by endorser 2
 	endorser1SimulationResults := &ledger.EndorserPrivateSimulationResults{
-		EndorserId:               "endorser1",
+		EndorserID:               "endorser1",
 		EndorsementBlockHeight:   10,
 		PrivateSimulationResults: []byte("results"),
 	}
@@ -102,7 +102,7 @@ func TestTransientStorePersistAndRetrieve(t *testing.T) {
 	// Persist simulation results into transient store
 	var err error
 	for i := 0; i < len(endorsersResults); i++ {
-		err = env.testTransientStore.Persist(txid, endorsersResults[i].EndorserId,
+		err = env.testTransientStore.Persist(txid, endorsersResults[i].EndorserID,
 			endorsersResults[i].EndorsementBlockHeight, endorsersResults[i].PrivateSimulationResults)
 		assert.NoError(err)
 	}
@@ -137,7 +137,7 @@ func TestTransientStorePurge(t *testing.T) {
 
 	// Results produced by endorser 1
 	endorser0SimulationResults := &ledger.EndorserPrivateSimulationResults{
-		EndorserId:               "endorser0",
+		EndorserID:               "endorser0",
 		EndorsementBlockHeight:   10,
 		PrivateSimulationResults: []byte("results"),
 	}
@@ -145,7 +145,7 @@ func TestTransientStorePurge(t *testing.T) {
 
 	// Results produced by endorser 2
 	endorser1SimulationResults := &ledger.EndorserPrivateSimulationResults{
-		EndorserId:               "endorser1",
+		EndorserID:               "endorser1",
 		EndorsementBlockHeight:   11,
 		PrivateSimulationResults: []byte("results"),
 	}
@@ -153,7 +153,7 @@ func TestTransientStorePurge(t *testing.T) {
 
 	// Results produced by endorser 3
 	endorser2SimulationResults := &ledger.EndorserPrivateSimulationResults{
-		EndorserId:               "endorser2",
+		EndorserID:               "endorser2",
 		EndorsementBlockHeight:   12,
 		PrivateSimulationResults: []byte("results"),
 	}
@@ -161,7 +161,7 @@ func TestTransientStorePurge(t *testing.T) {
 
 	// Results produced by endorser 3
 	endorser3SimulationResults := &ledger.EndorserPrivateSimulationResults{
-		EndorserId:               "endorser3",
+		EndorserID:               "endorser3",
 		EndorsementBlockHeight:   12,
 		PrivateSimulationResults: []byte("results"),
 	}
@@ -169,7 +169,7 @@ func TestTransientStorePurge(t *testing.T) {
 
 	// Results produced by endorser 3
 	endorser4SimulationResults := &ledger.EndorserPrivateSimulationResults{
-		EndorserId:               "endorser4",
+		EndorserID:               "endorser4",
 		EndorsementBlockHeight:   13,
 		PrivateSimulationResults: []byte("results"),
 	}
@@ -178,7 +178,7 @@ func TestTransientStorePurge(t *testing.T) {
 	// Persist simulation results into transient store
 	var err error
 	for i := 0; i < 5; i++ {
-		err = env.testTransientStore.Persist(txid, endorsersResults[i].EndorserId,
+		err = env.testTransientStore.Persist(txid, endorsersResults[i].EndorserID,
 			endorsersResults[i].EndorsementBlockHeight, endorsersResults[i].PrivateSimulationResults)
 		assert.NoError(err)
 	}

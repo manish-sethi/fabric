@@ -172,7 +172,7 @@ func (scanner *rwsetScanner) Next() (commonledger.QueryResult, error) {
 	dbVal := scanner.dbItr.Value()
 	endorserid, endorsementBlkHt := splitCompositeKeyOfPRWSet(dbKey)
 	return &ledger.EndorserPrivateSimulationResults{
-		EndorserId:               endorserid,
+		EndorserID:               endorserid,
 		EndorsementBlockHeight:   endorsementBlkHt,
 		PrivateSimulationResults: dbVal,
 	}, nil

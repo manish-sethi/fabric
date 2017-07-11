@@ -82,7 +82,7 @@ func runInsertClient(chain *chainmgmt.Chain, startKey, endKey int, wg *sync.Wait
 		simulator.Done()
 		sr, err := simulator.GetTxSimulationResults()
 		common.PanicOnError(err)
-		chain.SubmitTx(sr)
+		chain.SubmitTx(sr.PubDataSimulationResults)
 	}
 	wg.Done()
 }

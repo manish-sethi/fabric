@@ -24,8 +24,8 @@ import (
 	commonledger "github.com/hyperledger/fabric/common/ledger"
 	"github.com/hyperledger/fabric/common/ledger/testutil"
 	lgr "github.com/hyperledger/fabric/core/ledger"
-	"github.com/hyperledger/fabric/core/ledger/kvledger/pvtrwstorage"
 	"github.com/hyperledger/fabric/core/ledger/ledgerconfig"
+	"github.com/hyperledger/fabric/core/ledger/pvtrwstorage"
 	ledgertestutil "github.com/hyperledger/fabric/core/ledger/testutil"
 	"github.com/hyperledger/fabric/protos/common"
 	"github.com/hyperledger/fabric/protos/ledger/queryresult"
@@ -55,7 +55,7 @@ func TestKVLedgerBlockStorage(t *testing.T) {
 	simulator.SetState("ns1", "key3", []byte("value3"))
 	simulator.Done()
 	simRes, _ := simulator.GetTxSimulationResults()
-	block1 := bg.NextBlock([][]byte{simRes})
+	block1 := bg.NextBlock([][]byte{simRes.PubDataSimulationResults})
 	ledger.Commit(block1)
 
 	bcInfo, _ = ledger.GetBlockchainInfo()
@@ -69,7 +69,7 @@ func TestKVLedgerBlockStorage(t *testing.T) {
 	simulator.SetState("ns1", "key3", []byte("value6"))
 	simulator.Done()
 	simRes, _ = simulator.GetTxSimulationResults()
-	block2 := bg.NextBlock([][]byte{simRes})
+	block2 := bg.NextBlock([][]byte{simRes.PubDataSimulationResults})
 	ledger.Commit(block2)
 
 	bcInfo, _ = ledger.GetBlockchainInfo()
@@ -138,7 +138,7 @@ func TestKVLedgerDBRecovery(t *testing.T) {
 	simulator.Done()
 	simRes, _ := simulator.GetTxSimulationResults()
 	//generating a block based on the simulation result
-	block1 := bg.NextBlock([][]byte{simRes})
+	block1 := bg.NextBlock([][]byte{simRes.PubDataSimulationResults})
 	//performing validation of read and write set to find valid transactions
 	ledger.Commit(block1)
 	bcInfo, _ = ledger.GetBlockchainInfo()
@@ -158,7 +158,7 @@ func TestKVLedgerDBRecovery(t *testing.T) {
 	simulator.Done()
 	simRes, _ = simulator.GetTxSimulationResults()
 	//generating a block based on the simulation result
-	block2 := bg.NextBlock([][]byte{simRes})
+	block2 := bg.NextBlock([][]byte{simRes.PubDataSimulationResults})
 
 	//performing validation of read and write set to find valid transactions
 	ledger.(*kvLedger).txtmgmt.ValidateAndPrepare(block2, true)
@@ -270,7 +270,7 @@ func TestKVLedgerDBRecovery(t *testing.T) {
 	simulator.Done()
 	simRes, _ = simulator.GetTxSimulationResults()
 	//generating a block based on the simulation result
-	block3 := bg.NextBlock([][]byte{simRes})
+	block3 := bg.NextBlock([][]byte{simRes.PubDataSimulationResults})
 	//performing validation of read and write set to find valid transactions
 	ledger.(*kvLedger).txtmgmt.ValidateAndPrepare(block3, true)
 	//writing the validated block to block storage
@@ -370,7 +370,7 @@ func TestKVLedgerDBRecovery(t *testing.T) {
 	simulator.Done()
 	simRes, _ = simulator.GetTxSimulationResults()
 	//generating a block based on the simulation result
-	block4 := bg.NextBlock([][]byte{simRes})
+	block4 := bg.NextBlock([][]byte{simRes.PubDataSimulationResults})
 	//performing validation of read and write set to find valid transactions
 	ledger.(*kvLedger).txtmgmt.ValidateAndPrepare(block4, true)
 	//writing the validated block to block storage but fails to commit to state DB but
@@ -472,7 +472,7 @@ func TestLedgerWithCouchDbEnabledWithBinaryAndJSONData(t *testing.T) {
 	simulator.SetState("ns1", "key7", []byte("{\"shipmentID\":\"161003PKC7600\",\"customsInvoice\":{\"methodOfTransport\":\"AIR MAYBE\",\"invoiceNumber\":\"00091624\"},\"weightUnitOfMeasure\":\"KGM\",\"volumeUnitOfMeasure\": \"CO\",\"dimensionUnitOfMeasure\":\"CM\",\"currency\":\"USD\"}"))
 	simulator.Done()
 	simRes, _ := simulator.GetTxSimulationResults()
-	block1 := bg.NextBlock([][]byte{simRes})
+	block1 := bg.NextBlock([][]byte{simRes.PubDataSimulationResults})
 
 	ledger.Commit(block1)
 
@@ -490,7 +490,7 @@ func TestLedgerWithCouchDbEnabledWithBinaryAndJSONData(t *testing.T) {
 	simulator.SetState("ns1", "key8", []byte("{\"shipmentID\":\"161003PKC7700\",\"customsInvoice\":{\"methodOfTransport\":\"SHIP\",\"invoiceNumber\":\"00091625\"},\"weightUnitOfMeasure\":\"KGM\",\"volumeUnitOfMeasure\": \"CO\",\"dimensionUnitOfMeasure\":\"CM\",\"currency\":\"USD\"}"))
 	simulator.Done()
 	simRes, _ = simulator.GetTxSimulationResults()
-	simulationResults = append(simulationResults, simRes)
+	simulationResults = append(simulationResults, simRes.PubDataSimulationResults)
 	//add a 2nd transaction
 	simulator2, _ := ledger.NewTxSimulator()
 	simulator2.SetState("ns1", "key7", []byte("{\"shipmentID\":\"161003PKC7600\",\"customsInvoice\":{\"methodOfTransport\":\"TRAIN\",\"invoiceNumber\":\"00091624\"},\"weightUnitOfMeasure\":\"KGM\",\"volumeUnitOfMeasure\": \"CO\",\"dimensionUnitOfMeasure\":\"CM\",\"currency\":\"USD\"}"))
@@ -498,7 +498,7 @@ func TestLedgerWithCouchDbEnabledWithBinaryAndJSONData(t *testing.T) {
 	simulator2.SetState("ns1", "key10", []byte("{\"shipmentID\":\"261003PKC8000\",\"customsInvoice\":{\"methodOfTransport\":\"DONKEY\",\"invoiceNumber\":\"00091626\"},\"weightUnitOfMeasure\":\"KGM\",\"volumeUnitOfMeasure\": \"CO\",\"dimensionUnitOfMeasure\":\"CM\",\"currency\":\"USD\"}"))
 	simulator2.Done()
 	simRes2, _ := simulator2.GetTxSimulationResults()
-	simulationResults = append(simulationResults, simRes2)
+	simulationResults = append(simulationResults, simRes2.PubDataSimulationResults)
 
 	block2 := bg.NextBlock(simulationResults)
 	ledger.Commit(block2)
@@ -579,7 +579,7 @@ func TestKVLedgerTransientStore(t *testing.T) {
 	resultE0 := []byte("results")
 
 	// Persist simulation results into transient store
-	err := ledger.PutPrivateSimulationResults(txID, endorser0, bcInfo.Height, resultE0)
+	err := ledger.PutTransientData(txID, endorser0, bcInfo.Height, resultE0)
 	testutil.AssertNoError(t, err, "Error upon PutPrivateSimulationResults")
 
 	// Simulation results produced by endorser 1
@@ -587,12 +587,12 @@ func TestKVLedgerTransientStore(t *testing.T) {
 	resultE1 := []byte("results")
 
 	// Persist simulation results into transient store
-	err = ledger.PutPrivateSimulationResults(txID, endorser1, bcInfo.Height, resultE1)
+	err = ledger.PutTransientData(txID, endorser1, bcInfo.Height, resultE1)
 	testutil.AssertNoError(t, err, "Error upon PutPrivateSimulationResults")
 
 	// TEST GetPrivateSimulationResults()
 
-	iter, err := ledger.GetPrivateSimulationResults(txID)
+	iter, err := ledger.GetTransientData(txID)
 	testutil.AssertNoError(t, err, "Error upon GetPrivateSimulationResults")
 
 	// Expected Simulation Results from GetPrivateSimulationResults()
@@ -600,7 +600,7 @@ func TestKVLedgerTransientStore(t *testing.T) {
 
 	// Endorser 0's simulation result (expected)
 	endorser0SimulationResults := &lgr.EndorserPrivateSimulationResults{
-		EndorserId:               endorser0,
+		EndorserID:               endorser0,
 		EndorsementBlockHeight:   bcInfo.Height,
 		PrivateSimulationResults: resultE0,
 	}
@@ -608,7 +608,7 @@ func TestKVLedgerTransientStore(t *testing.T) {
 
 	// Endorser 1's simulation result (expected)
 	endorser1SimulationResults := &lgr.EndorserPrivateSimulationResults{
-		EndorserId:               endorser1,
+		EndorserID:               endorser1,
 		EndorsementBlockHeight:   bcInfo.Height,
 		PrivateSimulationResults: resultE1,
 	}
@@ -636,7 +636,7 @@ func TestKVLedgerTransientStore(t *testing.T) {
 	simulator.SetState("ns1", "key3", []byte("value3"))
 	simulator.Done()
 	simRes, _ := simulator.GetTxSimulationResults()
-	block1 := bg.NextBlock([][]byte{simRes})
+	block1 := bg.NextBlock([][]byte{simRes.PubDataSimulationResults})
 	ledger.Commit(block1)
 
 	bcInfo, _ = ledger.GetBlockchainInfo()
@@ -648,7 +648,7 @@ func TestKVLedgerTransientStore(t *testing.T) {
 	resultE2 := []byte("results")
 
 	// Persist simulation results into transient store
-	err = ledger.PutPrivateSimulationResults(txID, endorser2, bcInfo.Height, resultE2)
+	err = ledger.PutTransientData(txID, endorser2, bcInfo.Height, resultE2)
 	testutil.AssertNoError(t, err, "Error upon PutPrivateSimulationResults")
 
 	var minBlockToRetain uint64
@@ -675,14 +675,14 @@ func TestKVLedgerTransientStore(t *testing.T) {
 	testutil.AssertEquals(t, minBlockToRetain, minBlockRetained)
 
 	// Call GetPrivateSimulationResults() to verify only endorser 2 results exist
-	iter, err = ledger.GetPrivateSimulationResults(txID)
+	iter, err = ledger.GetTransientData(txID)
 	testutil.AssertNoError(t, err, "Error upon GetPrivateSimulationResults")
 
 	expectedEndorsersResults = nil
 
 	// Endorser 2's simulation result (expected)
 	endorser2SimulationResults := &lgr.EndorserPrivateSimulationResults{
-		EndorserId:               endorser2,
+		EndorserID:               endorser2,
 		EndorsementBlockHeight:   bcInfo.Height,
 		PrivateSimulationResults: resultE2,
 	}

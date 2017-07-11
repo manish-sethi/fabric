@@ -139,7 +139,7 @@ func TestMultipleLedgerBasicRW(t *testing.T) {
 		testutil.AssertNoError(t, err, "")
 		res, err := s.GetTxSimulationResults()
 		testutil.AssertNoError(t, err, "")
-		b := bg.NextBlock([][]byte{res})
+		b := bg.NextBlock([][]byte{res.PubDataSimulationResults})
 		err = l.Commit(b)
 		l.Close()
 		testutil.AssertNoError(t, err, "")
@@ -185,7 +185,7 @@ func TestLedgerBackup(t *testing.T) {
 	simulator.SetState("ns1", "key3", []byte("value3"))
 	simulator.Done()
 	simRes, _ := simulator.GetTxSimulationResults()
-	block1 := bg.NextBlock([][]byte{simRes})
+	block1 := bg.NextBlock([][]byte{simRes.PubDataSimulationResults})
 	ledger.Commit(block1)
 
 	simulator, _ = ledger.NewTxSimulator()
@@ -194,7 +194,7 @@ func TestLedgerBackup(t *testing.T) {
 	simulator.SetState("ns1", "key3", []byte("value6"))
 	simulator.Done()
 	simRes, _ = simulator.GetTxSimulationResults()
-	block2 := bg.NextBlock([][]byte{simRes})
+	block2 := bg.NextBlock([][]byte{simRes.PubDataSimulationResults})
 	ledger.Commit(block2)
 
 	ledger.Close()

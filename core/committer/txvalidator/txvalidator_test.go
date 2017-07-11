@@ -57,7 +57,7 @@ func TestBlockValidation(t *testing.T) {
 
 	simRes, _ := simulator.GetTxSimulationResults()
 
-	_, err := testutil.ConstructBytesProposalResponsePayload("v1", simRes)
+	_, err := testutil.ConstructBytesProposalResponsePayload("v1", simRes.PubDataSimulationResults)
 	if err != nil {
 		t.Fatalf("Could not construct ProposalResponsePayload bytes, err: %s", err)
 	}
