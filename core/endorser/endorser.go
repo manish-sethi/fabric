@@ -241,7 +241,7 @@ func (e *Endorser) simulateProposal(ctx context.Context, chainID string, txid st
 	}
 
 	//---3. execute the proposal and get simulation results
-	var simResult []byte
+	var simResult *ledger.TxSimulationResults
 	var res *pb.Response
 	var ccevent *pb.ChaincodeEvent
 	res, ccevent, err = e.callChaincode(ctx, chainID, version, txid, signedProp, prop, cis, cid, txsim)
@@ -255,8 +255,7 @@ func (e *Endorser) simulateProposal(ctx context.Context, chainID string, txid st
 			return nil, nil, nil, nil, err
 		}
 	}
-
-	return cdLedger, res, simResult, ccevent, nil
+	return cdLedger, res, simResult.PubDataSimulationResults, ccevent, nil
 }
 
 func (e *Endorser) getCDSFromLSCC(ctx context.Context, chainID string, txid string, signedProp *pb.SignedProposal, prop *pb.Proposal, chaincodeID string, txsim ledger.TxSimulator) (*ccprovider.ChaincodeData, error) {

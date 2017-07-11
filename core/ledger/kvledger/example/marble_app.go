@@ -69,12 +69,12 @@ func (marbleApp *MarbleApp) CreateMarble(args []string) (*common.Envelope, error
 
 	txSimulator.SetState(marbleApp.name, marbleName, marbleJsonBytes)
 
-	var txSimulationResults []byte
+	var txSimulationResults *ledger.TxSimulationResults
 	if txSimulationResults, err = txSimulator.GetTxSimulationResults(); err != nil {
 		return nil, err
 	}
 	logger.Debugf("CreateMarble() simulation done, packaging into a transaction...")
-	tx := constructTransaction(txSimulationResults)
+	tx := constructTransaction(txSimulationResults.PubDataSimulationResults)
 	logger.Debugf("Exiting CreateMarble()")
 	return tx, nil
 }
@@ -165,11 +165,11 @@ func (marbleApp *MarbleApp) TransferMarble(args []string) (*common.Envelope, err
 		return nil, err
 	}
 
-	var txSimulationResults []byte
+	var txSimulationResults *ledger.TxSimulationResults
 	if txSimulationResults, err = txSimulator.GetTxSimulationResults(); err != nil {
 		return nil, err
 	}
 	logger.Debugf("TransferMarble() simulation done, packaging into a transaction...")
-	tx := constructTransaction(txSimulationResults)
+	tx := constructTransaction(txSimulationResults.PubDataSimulationResults)
 	return tx, nil
 }
