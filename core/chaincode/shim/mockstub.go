@@ -64,6 +64,8 @@ type MockStub struct {
 
 	// mocked signedProposal
 	signedProposal *pb.SignedProposal
+
+	// mocked privateData
 }
 
 func (stub *MockStub) GetTxID() string {
@@ -142,6 +144,18 @@ func (stub *MockStub) MockInvokeWithSignedProposal(uuid string, args [][]byte, s
 	res := stub.cc.Invoke(stub)
 	stub.MockTransactionEnd(uuid)
 	return res
+}
+
+func (stub *MockStub) GetPrivateData(collection string, key string) ([]byte, error) {
+	return nil, errors.New("Not Implemented")
+}
+
+func (stub *MockStub) PutPrivateData(collection string, key string, value []byte) error {
+	return errors.New("Not Implemented")
+}
+
+func (stub *MockStub) DelPrivateData(collection string, key string) error {
+	return errors.New("Not Implemented")
 }
 
 // GetState retrieves the value for a given key from the ledger

@@ -380,11 +380,42 @@ func (stub *ChaincodeStub) InvokeChaincode(chaincodeName string, args [][]byte, 
 	return stub.handler.handleInvokeChaincode(chaincodeName, args, stub.TxID)
 }
 
+// --------- Chaincode APIs to access private data --------- //
+
+// GetPrivateData documentation can be found in interfaces.go
+func (stub *ChaincodeStub) GetPrivateData(collection string, key string) ([]byte, error) {
+	if collection == "" {
+		return nil, fmt.Errorf("collection must not be an empty string")
+	}
+	return stub.handler.handleGetState(collection, key, stub.TxID)
+}
+
+// PutPrivateData documentation can be found in interfaces.go
+func (stub *ChaincodeStub) PutPrivateData(collection string, key string, value []byte) error {
+	if collection == "" {
+		return fmt.Errorf("collection must not be an empty string")
+	}
+	if key == "" {
+		return fmt.Errorf("key must not be an empty string")
+	}
+	return stub.handler.handlePutState(collection, key, value, stub.TxID)
+}
+
+// DelPrivateData documentation can be found in interfaces.go
+func (stub *ChaincodeStub) DelPrivateData(collection string, key string) error {
+	if collection == "" {
+		return fmt.Errorf("collection must not be an empty string")
+	}
+	return stub.handler.handleDelState(collection, key, stub.TxID)
+}
+
 // --------- State functions ----------
 
 // GetState documentation can be found in interfaces.go
 func (stub *ChaincodeStub) GetState(key string) ([]byte, error) {
-	return stub.handler.handleGetState(key, stub.TxID)
+	// Access public data by setting the collection to empty string
+	collection := ""
+	return stub.handler.handleGetState(collection, key, stub.TxID)
 }
 
 // PutState documentation can be found in interfaces.go
@@ -392,12 +423,16 @@ func (stub *ChaincodeStub) PutState(key string, value []byte) error {
 	if key == "" {
 		return fmt.Errorf("key must not be an empty string")
 	}
-	return stub.handler.handlePutState(key, value, stub.TxID)
+	// Access to public data by setting the collection to empty string
+	collection := ""
+	return stub.handler.handlePutState(collection, key, value, stub.TxID)
 }
 
 // DelState documentation can be found in interfaces.go
 func (stub *ChaincodeStub) DelState(key string) error {
-	return stub.handler.handleDelState(key, stub.TxID)
+	// Access to public data by setting the collection to empty string
+	collection := ""
+	return stub.handler.handleDelState(collection, key, stub.TxID)
 }
 
 // CommonIterator documentation can be found in interfaces.go
