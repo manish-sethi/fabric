@@ -46,6 +46,7 @@ func NewBlockGenerator(t *testing.T, ledgerID string, signTxs bool) (*BlockGener
 }
 
 // NextBlock constructs next block in sequence that includes a number of transactions - one per simulationResults
+// TODO: Should take txids as an argument and use it while adding transactions to the block
 func (bg *BlockGenerator) NextBlock(simulationResults [][]byte) *common.Block {
 	block := ConstructBlock(bg.t, bg.blockNum, bg.previousHash, simulationResults, bg.signTxs)
 	bg.blockNum++

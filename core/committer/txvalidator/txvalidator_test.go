@@ -49,7 +49,8 @@ func TestBlockValidation(t *testing.T) {
 	ledger, _ := ledgermgmt.CreateLedger(gb)
 	defer ledger.Close()
 
-	simulator, _ := ledger.NewTxSimulator()
+	txid := util2.GenerateUUID()
+	simulator, _ := ledger.NewTxSimulator(txid)
 	simulator.SetState("ns1", "key1", []byte("value1"))
 	simulator.SetState("ns1", "key2", []byte("value2"))
 	simulator.SetState("ns1", "key3", []byte("value3"))
@@ -69,7 +70,7 @@ func TestBlockValidation(t *testing.T) {
 	testutil.AssertEquals(t, bcInfo, &common.BlockchainInfo{
 		Height: 1, CurrentBlockHash: gbHash, PreviousBlockHash: nil})
 
-	block := testutil.ConstructBlock(t, 1, gbHash, [][]byte{simRes}, true)
+	block := testutil.ConstructBlock(t, 1, gbHash, [][]byte{simRes.PubDataSimulationResults}, true)
 
 	tValidator.Validate(block)
 

@@ -168,9 +168,9 @@ func finitPeer(lis net.Listener, chainIDs ...string) {
 	}
 }
 
-func startTxSimulation(ctxt context.Context, chainID string) (context.Context, ledger.TxSimulator, error) {
+func startTxSimulation(ctxt context.Context, chainID string, txid string) (context.Context, ledger.TxSimulator, error) {
 	lgr := peer.GetLedger(chainID)
-	txsim, err := lgr.NewTxSimulator()
+	txsim, err := lgr.NewTxSimulator(txid)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -322,14 +322,12 @@ func deploy2(ctx context.Context, cccid *ccprovider.CCContext, chaincodeDeployme
 		return nil, fmt.Errorf("Error creating lscc spec : %s\n", err)
 	}
 
-	ctx, txsim, err := startTxSimulation(ctx, cccid.ChainID)
+	uuid := util.GenerateUUID()
+	cccid.TxID = uuid
+	ctx, txsim, err := startTxSimulation(ctx, cccid.ChainID, cccid.TxID)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to get handle to simulator: %s ", err)
 	}
-
-	uuid := util.GenerateUUID()
-
-	cccid.TxID = uuid
 
 	defer func() {
 		//no error, lets try commit
@@ -373,7 +371,7 @@ func invokeWithVersion(ctx context.Context, chainID string, version string, spec
 	uuid = util.GenerateUUID()
 
 	var txsim ledger.TxSimulator
-	ctx, txsim, err = startTxSimulation(ctx, chainID)
+	ctx, txsim, err = startTxSimulation(ctx, chainID, uuid)
 	if err != nil {
 		return nil, uuid, nil, fmt.Errorf("Failed to get handle to simulator: %s ", err)
 	}
@@ -543,7 +541,8 @@ func _(chainID string, _ string) error {
 
 // Check the correctness of the final state after transaction execution.
 func checkFinalState(cccid *ccprovider.CCContext, a int, b int) error {
-	_, txsim, err := startTxSimulation(context.Background(), cccid.ChainID)
+	txid := util.GenerateUUID()
+	_, txsim, err := startTxSimulation(context.Background(), cccid.ChainID, txid)
 	if err != nil {
 		return fmt.Errorf("Failed to get handle to simulator: %s ", err)
 	}
