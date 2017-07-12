@@ -18,6 +18,7 @@ package historyleveldb
 
 import (
 	"errors"
+	"fmt"
 
 	commonledger "github.com/hyperledger/fabric/common/ledger"
 	"github.com/hyperledger/fabric/common/ledger/blkstorage"
@@ -52,6 +53,11 @@ func (q *LevelHistoryDBQueryExecutor) GetHistoryForKey(namespace string, key str
 	// range scan to find any history records starting with namespace~key
 	dbItr := q.historyDB.db.GetIterator(compositeStartKey, compositeEndKey)
 	return newHistoryScanner(compositeStartKey, namespace, key, dbItr, q.blockStore), nil
+}
+
+// GetHistoryForPrivateData implements function in the interface `ledger.HistoryQueryExecutor`
+func (q *LevelHistoryDBQueryExecutor) GetHistoryForPrivateData(namespace, collection, key string) (commonledger.ResultsIterator, error) {
+	return nil, fmt.Errorf("Not yet implemented")
 }
 
 //historyScanner implements ResultsIterator for iterating through history results
