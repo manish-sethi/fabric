@@ -25,6 +25,7 @@ import (
 	configtxtest "github.com/hyperledger/fabric/common/configtx/test"
 	"github.com/hyperledger/fabric/common/ledger/blkstorage/fsblkstorage"
 	"github.com/hyperledger/fabric/common/ledger/testutil"
+	"github.com/hyperledger/fabric/common/util"
 	"github.com/hyperledger/fabric/core/ledger"
 	"github.com/hyperledger/fabric/core/ledger/ledgerconfig"
 	"github.com/hyperledger/fabric/protos/common"
@@ -133,7 +134,8 @@ func TestMultipleLedgerBasicRW(t *testing.T) {
 		l, err := provider.Create(gb)
 		testutil.AssertNoError(t, err, "")
 		ledgers[i] = l
-		s, _ := l.NewTxSimulator()
+		txid := util.GenerateUUID()
+		s, _ := l.NewTxSimulator(txid)
 		err = s.SetState("ns", "testKey", []byte(fmt.Sprintf("testValue_%d", i)))
 		s.Done()
 		testutil.AssertNoError(t, err, "")
@@ -179,7 +181,8 @@ func TestLedgerBackup(t *testing.T) {
 	gbHash := gb.Header.Hash()
 	ledger, _ := provider.Create(gb)
 
-	simulator, _ := ledger.NewTxSimulator()
+	txid := util.GenerateUUID()
+	simulator, _ := ledger.NewTxSimulator(txid)
 	simulator.SetState("ns1", "key1", []byte("value1"))
 	simulator.SetState("ns1", "key2", []byte("value2"))
 	simulator.SetState("ns1", "key3", []byte("value3"))
@@ -188,7 +191,8 @@ func TestLedgerBackup(t *testing.T) {
 	block1 := bg.NextBlock([][]byte{simRes.PubDataSimulationResults})
 	ledger.Commit(block1)
 
-	simulator, _ = ledger.NewTxSimulator()
+	txid = util.GenerateUUID()
+	simulator, _ = ledger.NewTxSimulator(txid)
 	simulator.SetState("ns1", "key1", []byte("value4"))
 	simulator.SetState("ns1", "key2", []byte("value5"))
 	simulator.SetState("ns1", "key3", []byte("value6"))

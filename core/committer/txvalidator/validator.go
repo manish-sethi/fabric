@@ -550,7 +550,7 @@ func (v *vsccValidatorImpl) VSCCValidateTx(payload *common.Payload, envBytes []b
 }
 
 func (v *vsccValidatorImpl) VSCCValidateTxForCC(envBytes []byte, txid, chid, vsccName, vsccVer string, policy []byte) error {
-	ctxt, err := v.ccprovider.GetContext(v.support.Ledger())
+	ctxt, err := v.ccprovider.GetContext(v.support.Ledger(), txid)
 	if err != nil {
 		logger.Errorf("Cannot obtain context for txid=%s, err %s", txid, err)
 		return err
