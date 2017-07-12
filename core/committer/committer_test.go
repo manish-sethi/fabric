@@ -57,7 +57,7 @@ func TestKVLedgerBlockStorage(t *testing.T) {
 	simulator.Done()
 
 	simRes, _ := simulator.GetTxSimulationResults()
-	block1 := testutil.ConstructBlock(t, 1, gbHash, [][]byte{simRes}, true)
+	block1 := testutil.ConstructBlock(t, 1, gbHash, [][]byte{simRes.PubDataSimulationResults}, true)
 
 	err = committer.Commit(block1)
 	assert.NoError(t, err)

@@ -17,12 +17,14 @@ limitations under the License.
 package pvtrwstorage
 
 import (
+	"fmt"
+	"os"
+	"testing"
+
 	commonledger "github.com/hyperledger/fabric/common/ledger"
 	"github.com/hyperledger/fabric/core/ledger"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
-	"os"
-	"testing"
 )
 
 func TestMain(m *testing.M) {
@@ -30,18 +32,60 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func TestTransientStorePersistAndRetrieve(t *testing.T) {
-	env := NewTestTransientStoreEnv(t)
+func TestPurgeIndexKeyCodingEncoding(t *testing.T) {
 	assert := assert.New(t)
+	blkHts := []uint64{0, 10, 20000}
+	txids := []string{"txid", ""}
+	endorserids := []string{"endorserid", ""}
+	for _, blkHt := range blkHts {
+		for _, txid := range txids {
+			for _, endorserid := range endorserids {
+				testCase := fmt.Sprintf("blkHt=%d,txid=%s,endorserid=%s", blkHt, txid, endorserid)
+				t.Run(testCase, func(t *testing.T) {
+					t.Logf("Running test case [%s]", testCase)
+					purgeIndexKey := createCompositeKeyForPurgeIndex(blkHt, txid, endorserid)
+					txid1, endorserid1, blkHt1 := splitCompositeKeyOfPurgeIndex(purgeIndexKey)
+					assert.Equal(txid, txid1)
+					assert.Equal(endorserid, endorserid1)
+					assert.Equal(blkHt, blkHt1)
+				})
+			}
+		}
+	}
+}
 
-	txId := "txId-1"
+func TestRWSetKeyCodingEncoding(t *testing.T) {
+	assert := assert.New(t)
+	blkHts := []uint64{0, 10, 20000}
+	txids := []string{"txid", ""}
+	endorserids := []string{"endorserid", ""}
+	for _, blkHt := range blkHts {
+		for _, txid := range txids {
+			for _, endorserid := range endorserids {
+				testCase := fmt.Sprintf("blkHt=%d,txid=%s,endorserid=%s", blkHt, txid, endorserid)
+				t.Run(testCase, func(t *testing.T) {
+					t.Logf("Running test case [%s]", testCase)
+					rwsetKey := createCompositeKeyForPRWSet(txid, endorserid, blkHt)
+					endorserid1, blkHt1 := splitCompositeKeyOfPRWSet(rwsetKey)
+					assert.Equal(endorserid, endorserid1)
+					assert.Equal(blkHt, blkHt1)
+				})
+			}
+		}
+	}
+}
 
-	// Create private simulation results for txId-1
+func TestTransientStorePersistAndRetrieve(t *testing.T) {
+	env := newTestTransientStoreEnv(t)
+	assert := assert.New(t)
+	txid := "txid-1"
+
+	// Create private simulation results for txid-1
 	var endorsersResults []*ledger.EndorserPrivateSimulationResults
 
 	// Results produced by endorser 1
 	endorser0SimulationResults := &ledger.EndorserPrivateSimulationResults{
-		EndorserId:               "endorser0",
+		EndorserID:               "endorser0",
 		EndorsementBlockHeight:   10,
 		PrivateSimulationResults: []byte("results"),
 	}
@@ -49,7 +93,7 @@ func TestTransientStorePersistAndRetrieve(t *testing.T) {
 
 	// Results produced by endorser 2
 	endorser1SimulationResults := &ledger.EndorserPrivateSimulationResults{
-		EndorserId:               "endorser1",
+		EndorserID:               "endorser1",
 		EndorsementBlockHeight:   10,
 		PrivateSimulationResults: []byte("results"),
 	}
@@ -57,15 +101,15 @@ func TestTransientStorePersistAndRetrieve(t *testing.T) {
 
 	// Persist simulation results into transient store
 	var err error
-	for i := 0; i < 2; i++ {
-		err = env.testTransientStore.Persist(txId, endorsersResults[i].EndorserId,
+	for i := 0; i < len(endorsersResults); i++ {
+		err = env.testTransientStore.Persist(txid, endorsersResults[i].EndorserID,
 			endorsersResults[i].EndorsementBlockHeight, endorsersResults[i].PrivateSimulationResults)
 		assert.NoError(err)
 	}
 
-	// Retrieve simulation results of txId-1 from transient store
+	// Retrieve simulation results of txid-1 from transient store
 	var iter commonledger.ResultsIterator
-	iter, err = env.testTransientStore.GetTxPrivateRWSetByTxId(txId)
+	iter, err = env.testTransientStore.GetTxPrivateRWSetByTxid(txid)
 	assert.NoError(err)
 
 	var result commonledger.QueryResult
@@ -80,22 +124,20 @@ func TestTransientStorePersistAndRetrieve(t *testing.T) {
 	}
 	iter.Close()
 	assert.Equal(endorsersResults, actualEndorsersResults)
-
-	env.cleanup()
 }
 
 func TestTransientStorePurge(t *testing.T) {
-	env := NewTestTransientStoreEnv(t)
+	env := newTestTransientStoreEnv(t)
 	assert := assert.New(t)
 
-	txId := "txId-1"
+	txid := "txid-1"
 
-	// Create private simulation results for txId-1
+	// Create private simulation results for txid-1
 	var endorsersResults []*ledger.EndorserPrivateSimulationResults
 
 	// Results produced by endorser 1
 	endorser0SimulationResults := &ledger.EndorserPrivateSimulationResults{
-		EndorserId:               "endorser0",
+		EndorserID:               "endorser0",
 		EndorsementBlockHeight:   10,
 		PrivateSimulationResults: []byte("results"),
 	}
@@ -103,7 +145,7 @@ func TestTransientStorePurge(t *testing.T) {
 
 	// Results produced by endorser 2
 	endorser1SimulationResults := &ledger.EndorserPrivateSimulationResults{
-		EndorserId:               "endorser1",
+		EndorserID:               "endorser1",
 		EndorsementBlockHeight:   11,
 		PrivateSimulationResults: []byte("results"),
 	}
@@ -111,7 +153,7 @@ func TestTransientStorePurge(t *testing.T) {
 
 	// Results produced by endorser 3
 	endorser2SimulationResults := &ledger.EndorserPrivateSimulationResults{
-		EndorserId:               "endorser2",
+		EndorserID:               "endorser2",
 		EndorsementBlockHeight:   12,
 		PrivateSimulationResults: []byte("results"),
 	}
@@ -119,7 +161,7 @@ func TestTransientStorePurge(t *testing.T) {
 
 	// Results produced by endorser 3
 	endorser3SimulationResults := &ledger.EndorserPrivateSimulationResults{
-		EndorserId:               "endorser3",
+		EndorserID:               "endorser3",
 		EndorsementBlockHeight:   12,
 		PrivateSimulationResults: []byte("results"),
 	}
@@ -127,7 +169,7 @@ func TestTransientStorePurge(t *testing.T) {
 
 	// Results produced by endorser 3
 	endorser4SimulationResults := &ledger.EndorserPrivateSimulationResults{
-		EndorserId:               "endorser4",
+		EndorserID:               "endorser4",
 		EndorsementBlockHeight:   13,
 		PrivateSimulationResults: []byte("results"),
 	}
@@ -136,7 +178,7 @@ func TestTransientStorePurge(t *testing.T) {
 	// Persist simulation results into transient store
 	var err error
 	for i := 0; i < 5; i++ {
-		err = env.testTransientStore.Persist(txId, endorsersResults[i].EndorserId,
+		err = env.testTransientStore.Persist(txid, endorsersResults[i].EndorserID,
 			endorsersResults[i].EndorsementBlockHeight, endorsersResults[i].PrivateSimulationResults)
 		assert.NoError(err)
 	}
@@ -146,12 +188,12 @@ func TestTransientStorePurge(t *testing.T) {
 	err = env.testTransientStore.Purge(minEndorsementBlkHtToRetain)
 	assert.NoError(err)
 
-	// Retrieve simulation results of txId-1 from transient store
+	// Retrieve simulation results of txid-1 from transient store
 	var iter commonledger.ResultsIterator
-	iter, err = env.testTransientStore.GetTxPrivateRWSetByTxId(txId)
+	iter, err = env.testTransientStore.GetTxPrivateRWSetByTxid(txid)
 	assert.NoError(err)
 
-	// Expected results for txId-1
+	// Expected results for txid-1
 	var expectedEndorsersResults []*ledger.EndorserPrivateSimulationResults
 	expectedEndorsersResults = append(expectedEndorsersResults, endorser2SimulationResults) //endorsed at height 12
 	expectedEndorsersResults = append(expectedEndorsersResults, endorser3SimulationResults) //endorsed at height 12

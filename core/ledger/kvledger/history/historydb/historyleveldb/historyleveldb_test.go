@@ -37,8 +37,7 @@ func TestMain(m *testing.M) {
 
 //TestSavepoint tests that save points get written after each block and get returned via GetBlockNumfromSavepoint
 func TestSavepoint(t *testing.T) {
-
-	env := NewTestHistoryEnv(t)
+	env := newTestHistoryEnv(t)
 	defer env.cleanup()
 
 	// read the savepoint, it should not exist and should return nil Height object
@@ -60,11 +59,11 @@ func TestSavepoint(t *testing.T) {
 	testutil.AssertEquals(t, savepoint.BlockNum, uint64(0))
 
 	// create the next block (block 1)
-	simulator, _ := env.txmgr.NewTxSimulator()
+	simulator, _ := env.txmgr.NewTxSimulator("test_tx_1")
 	simulator.SetState("ns1", "key1", []byte("value1"))
 	simulator.Done()
 	simRes, _ := simulator.GetTxSimulationResults()
-	block1 := bg.NextBlock([][]byte{simRes})
+	block1 := bg.NextBlock([][]byte{simRes.PubDataSimulationResults})
 	testutil.AssertNoError(t, env.testHistoryDB.Commit(block1), "")
 	savepoint, err = env.testHistoryDB.GetLastSavepoint()
 	testutil.AssertNoError(t, err, "Error upon historyDatabase.GetLastSavepoint()")
@@ -77,11 +76,11 @@ func TestSavepoint(t *testing.T) {
 	testutil.AssertEquals(t, blockNum, uint64(2))
 
 	// create the next block (block 2)
-	simulator, _ = env.txmgr.NewTxSimulator()
+	simulator, _ = env.txmgr.NewTxSimulator("test_tx_2")
 	simulator.SetState("ns1", "key1", []byte("value2"))
 	simulator.Done()
 	simRes, _ = simulator.GetTxSimulationResults()
-	block2 := bg.NextBlock([][]byte{simRes})
+	block2 := bg.NextBlock([][]byte{simRes.PubDataSimulationResults})
 
 	// assume that the peer failed to commit this block to historyDB and is being recovered now
 	env.testHistoryDB.CommitLostBlock(block2)
@@ -97,8 +96,7 @@ func TestSavepoint(t *testing.T) {
 }
 
 func TestHistory(t *testing.T) {
-
-	env := NewTestHistoryEnv(t)
+	env := newTestHistoryEnv(t)
 	defer env.cleanup()
 	provider := env.testBlockStorageEnv.provider
 	ledger1id := "ledger1"
@@ -111,12 +109,12 @@ func TestHistory(t *testing.T) {
 	testutil.AssertNoError(t, env.testHistoryDB.Commit(gb), "")
 
 	//block1
-	simulator, _ := env.txmgr.NewTxSimulator()
+	simulator, _ := env.txmgr.NewTxSimulator("test_tx_1")
 	value1 := []byte("value1")
 	simulator.SetState("ns1", "key7", value1)
 	simulator.Done()
 	simRes, _ := simulator.GetTxSimulationResults()
-	block1 := bg.NextBlock([][]byte{simRes})
+	block1 := bg.NextBlock([][]byte{simRes.PubDataSimulationResults})
 	err = store1.AddBlock(block1)
 	testutil.AssertNoError(t, err, "")
 	err = env.testHistoryDB.Commit(block1)
@@ -124,19 +122,19 @@ func TestHistory(t *testing.T) {
 
 	//block2 tran1
 	simulationResults := [][]byte{}
-	simulator, _ = env.txmgr.NewTxSimulator()
+	simulator, _ = env.txmgr.NewTxSimulator("test_tx_2")
 	value2 := []byte("value2")
 	simulator.SetState("ns1", "key7", value2)
 	simulator.Done()
 	simRes, _ = simulator.GetTxSimulationResults()
-	simulationResults = append(simulationResults, simRes)
+	simulationResults = append(simulationResults, simRes.PubDataSimulationResults)
 	//block2 tran2
-	simulator2, _ := env.txmgr.NewTxSimulator()
+	simulator2, _ := env.txmgr.NewTxSimulator("test_tx_3")
 	value3 := []byte("value3")
 	simulator2.SetState("ns1", "key7", value3)
 	simulator2.Done()
 	simRes2, _ := simulator2.GetTxSimulationResults()
-	simulationResults = append(simulationResults, simRes2)
+	simulationResults = append(simulationResults, simRes2.PubDataSimulationResults)
 	block2 := bg.NextBlock(simulationResults)
 	err = store1.AddBlock(block2)
 	testutil.AssertNoError(t, err, "")
@@ -144,11 +142,11 @@ func TestHistory(t *testing.T) {
 	testutil.AssertNoError(t, err, "")
 
 	//block3
-	simulator, _ = env.txmgr.NewTxSimulator()
+	simulator, _ = env.txmgr.NewTxSimulator("test_tx_4")
 	simulator.DeleteState("ns1", "key7")
 	simulator.Done()
 	simRes, _ = simulator.GetTxSimulationResults()
-	block3 := bg.NextBlock([][]byte{simRes})
+	block3 := bg.NextBlock([][]byte{simRes.PubDataSimulationResults})
 	err = store1.AddBlock(block3)
 	testutil.AssertNoError(t, err, "")
 	err = env.testHistoryDB.Commit(block3)
@@ -189,8 +187,7 @@ func TestHistory(t *testing.T) {
 }
 
 func TestHistoryForInvalidTran(t *testing.T) {
-
-	env := NewTestHistoryEnv(t)
+	env := newTestHistoryEnv(t)
 	defer env.cleanup()
 	provider := env.testBlockStorageEnv.provider
 	ledger1id := "ledger1"
@@ -203,12 +200,12 @@ func TestHistoryForInvalidTran(t *testing.T) {
 	testutil.AssertNoError(t, env.testHistoryDB.Commit(gb), "")
 
 	//block1
-	simulator, _ := env.txmgr.NewTxSimulator()
+	simulator, _ := env.txmgr.NewTxSimulator("test_tx_1")
 	value1 := []byte("value1")
 	simulator.SetState("ns1", "key7", value1)
 	simulator.Done()
 	simRes, _ := simulator.GetTxSimulationResults()
-	block1 := bg.NextBlock([][]byte{simRes})
+	block1 := bg.NextBlock([][]byte{simRes.PubDataSimulationResults})
 
 	//for this invalid tran test, set the transaction to invalid
 	txsFilter := util.TxValidationFlags(block1.Metadata.Metadata[common.BlockMetadataIndex_TRANSACTIONS_FILTER])
@@ -233,16 +230,12 @@ func TestHistoryForInvalidTran(t *testing.T) {
 
 //TestSavepoint tests that save points get written after each block and get returned via GetBlockNumfromSavepoint
 func TestHistoryDisabled(t *testing.T) {
-
-	env := NewTestHistoryEnv(t)
+	env := newTestHistoryEnv(t)
 	defer env.cleanup()
-
 	viper.Set("ledger.history.enableHistoryDatabase", "false")
-
 	//no need to pass blockstore into history executore, it won't be used in this test
 	qhistory, err := env.testHistoryDB.NewHistoryQueryExecutor(nil)
 	testutil.AssertNoError(t, err, "Error upon NewHistoryQueryExecutor")
-
 	_, err2 := qhistory.GetHistoryForKey("ns1", "key7")
 	testutil.AssertError(t, err2, "Error should have been returned for GetHistoryForKey() when history disabled")
 }
@@ -250,13 +243,10 @@ func TestHistoryDisabled(t *testing.T) {
 //TestGenesisBlockNoError tests that Genesis blocks are ignored by history processing
 // since we only persist history of chaincode key writes
 func TestGenesisBlockNoError(t *testing.T) {
-
-	env := NewTestHistoryEnv(t)
+	env := newTestHistoryEnv(t)
 	defer env.cleanup()
-
 	block, err := configtxtest.MakeGenesisBlock("test_chainid")
 	testutil.AssertNoError(t, err, "")
-
 	err = env.testHistoryDB.Commit(block)
 	testutil.AssertNoError(t, err, "")
 }

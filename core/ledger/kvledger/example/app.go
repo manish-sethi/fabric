@@ -50,11 +50,11 @@ func (app *App) Init(initialBalances map[string]int) (*common.Envelope, error) {
 	for accountID, bal := range initialBalances {
 		txSimulator.SetState(app.name, accountID, toBytes(bal))
 	}
-	var txSimulationResults []byte
+	var txSimulationResults *ledger.TxSimulationResults
 	if txSimulationResults, err = txSimulator.GetTxSimulationResults(); err != nil {
 		return nil, err
 	}
-	tx := constructTransaction(txSimulationResults)
+	tx := constructTransaction(txSimulationResults.PubDataSimulationResults)
 	return tx, nil
 }
 
@@ -84,14 +84,14 @@ func (app *App) TransferFunds(fromAccount string, toAccount string, transferAmt 
 	balTo := toInt(balToBytes)
 	txSimulator.SetState(app.name, fromAccount, toBytes(balFrom-transferAmt))
 	txSimulator.SetState(app.name, toAccount, toBytes(balTo+transferAmt))
-	var txSimulationResults []byte
+	var txSimulationResults *ledger.TxSimulationResults
 	if txSimulationResults, err = txSimulator.GetTxSimulationResults(); err != nil {
 		return nil, err
 	}
 
 	// act as endorsing peer to create an Action with the SimulationResults
 	// then act as SDK to create a Transaction with the EndorsedAction
-	tx := constructTransaction(txSimulationResults)
+	tx := constructTransaction(txSimulationResults.PubDataSimulationResults)
 	return tx, nil
 }
 

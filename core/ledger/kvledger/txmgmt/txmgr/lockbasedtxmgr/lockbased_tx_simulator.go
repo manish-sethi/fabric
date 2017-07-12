@@ -19,7 +19,7 @@ package lockbasedtxmgr
 import (
 	"errors"
 
-	"github.com/hyperledger/fabric/common/util"
+	"github.com/hyperledger/fabric/core/ledger"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/rwsetutil"
 )
 
@@ -29,12 +29,11 @@ type lockBasedTxSimulator struct {
 	rwsetBuilder *rwsetutil.RWSetBuilder
 }
 
-func newLockBasedTxSimulator(txmgr *LockBasedTxMgr) *lockBasedTxSimulator {
+func newLockBasedTxSimulator(txmgr *LockBasedTxMgr, txid string) *lockBasedTxSimulator {
 	rwsetBuilder := rwsetutil.NewRWSetBuilder()
 	helper := &queryHelper{txmgr: txmgr, rwsetBuilder: rwsetBuilder}
-	id := util.GenerateUUID()
-	logger.Debugf("constructing new tx simulator [%s]", id)
-	return &lockBasedTxSimulator{lockBasedQueryExecutor{helper, id}, rwsetBuilder}
+	logger.Debugf("constructing new tx simulator txid = [%s]", txid)
+	return &lockBasedTxSimulator{lockBasedQueryExecutor{helper, txid}, rwsetBuilder}
 }
 
 // GetState implements method in interface `ledger.TxSimulator`
@@ -67,14 +66,53 @@ func (s *lockBasedTxSimulator) SetStateMultipleKeys(namespace string, kvs map[st
 	return nil
 }
 
+// SetPrivateData implements method in interface `ledger.PrivacyEnabledTxSimulator`
+func (s *lockBasedTxSimulator) SetPrivateData(ns, coll, key string, value []byte) error {
+	s.helper.checkDone()
+	if err := s.helper.txmgr.db.ValidateKey(key); err != nil {
+		return err
+	}
+	return s.rwsetBuilder.AddToPvtAndHashedWriteSet(ns, coll, key, value)
+}
+
+// DeletePrivateData implements method in interface `ledger.PrivacyEnabledTxSimulator`
+func (s *lockBasedTxSimulator) DeletePrivateData(ns, coll, key string) error {
+	return s.SetPrivateData(ns, coll, key, nil)
+}
+
+// SetPrivateDataMultipleKeys implements method in interface `ledger.PrivacyEnabledTxSimulator`
+func (s *lockBasedTxSimulator) SetPrivateDataMultipleKeys(ns, coll string, kvs map[string][]byte) error {
+	for k, v := range kvs {
+		if err := s.SetPrivateData(ns, coll, k, v); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // GetTxSimulationResults implements method in interface `ledger.TxSimulator`
-func (s *lockBasedTxSimulator) GetTxSimulationResults() ([]byte, error) {
+func (s *lockBasedTxSimulator) GetTxSimulationResults() (*ledger.TxSimulationResults, error) {
 	logger.Debugf("Simulation completed, getting simulation results")
 	s.Done()
 	if s.helper.err != nil {
 		return nil, s.helper.err
 	}
-	return s.rwsetBuilder.GetTxReadWriteSet().ToProtoBytes()
+	txRwSet := s.rwsetBuilder.GetTxReadWriteSet()
+	txPvtRwSet := s.rwsetBuilder.GetTxPvtReadWriteSet()
+	pubSimulationRes, err := txRwSet.ToProtoBytes()
+	if err != nil {
+		return nil, err
+	}
+	pvtSimulationRes, err := txPvtRwSet.ToProtoBytes()
+	if err != nil {
+		return nil, err
+	}
+	return &ledger.TxSimulationResults{
+		PubDataSimulationResults: pubSimulationRes,
+		PvtDataSimulationResults: pvtSimulationRes,
+		// TODO take block height in the begining
+		SimulationBlkHt: 2,
+	}, nil
 }
 
 // ExecuteUpdate implements method in interface `ledger.TxSimulator`
