@@ -23,6 +23,7 @@ import (
 
 	configtxtest "github.com/hyperledger/fabric/common/configtx/test"
 	"github.com/hyperledger/fabric/common/ledger/testutil"
+	util2 "github.com/hyperledger/fabric/common/util"
 	"github.com/hyperledger/fabric/core/ledger/util"
 	"github.com/hyperledger/fabric/protos/common"
 	"github.com/hyperledger/fabric/protos/ledger/queryresult"
@@ -59,7 +60,8 @@ func TestSavepoint(t *testing.T) {
 	testutil.AssertEquals(t, savepoint.BlockNum, uint64(0))
 
 	// create the next block (block 1)
-	simulator, _ := env.txmgr.NewTxSimulator("test_tx_1")
+	txid := util2.GenerateUUID()
+	simulator, _ := env.txmgr.NewTxSimulator(txid)
 	simulator.SetState("ns1", "key1", []byte("value1"))
 	simulator.Done()
 	simRes, _ := simulator.GetTxSimulationResults()
@@ -76,7 +78,8 @@ func TestSavepoint(t *testing.T) {
 	testutil.AssertEquals(t, blockNum, uint64(2))
 
 	// create the next block (block 2)
-	simulator, _ = env.txmgr.NewTxSimulator("test_tx_2")
+	txid = util2.GenerateUUID()
+	simulator, _ = env.txmgr.NewTxSimulator(txid)
 	simulator.SetState("ns1", "key1", []byte("value2"))
 	simulator.Done()
 	simRes, _ = simulator.GetTxSimulationResults()
@@ -109,7 +112,8 @@ func TestHistory(t *testing.T) {
 	testutil.AssertNoError(t, env.testHistoryDB.Commit(gb), "")
 
 	//block1
-	simulator, _ := env.txmgr.NewTxSimulator("test_tx_1")
+	txid := util2.GenerateUUID()
+	simulator, _ := env.txmgr.NewTxSimulator(txid)
 	value1 := []byte("value1")
 	simulator.SetState("ns1", "key7", value1)
 	simulator.Done()
@@ -122,14 +126,16 @@ func TestHistory(t *testing.T) {
 
 	//block2 tran1
 	simulationResults := [][]byte{}
-	simulator, _ = env.txmgr.NewTxSimulator("test_tx_2")
+	txid = util2.GenerateUUID()
+	simulator, _ = env.txmgr.NewTxSimulator(txid)
 	value2 := []byte("value2")
 	simulator.SetState("ns1", "key7", value2)
 	simulator.Done()
 	simRes, _ = simulator.GetTxSimulationResults()
 	simulationResults = append(simulationResults, simRes.PubDataSimulationResults)
 	//block2 tran2
-	simulator2, _ := env.txmgr.NewTxSimulator("test_tx_3")
+	txid2 := util2.GenerateUUID()
+	simulator2, _ := env.txmgr.NewTxSimulator(txid2)
 	value3 := []byte("value3")
 	simulator2.SetState("ns1", "key7", value3)
 	simulator2.Done()
@@ -142,7 +148,8 @@ func TestHistory(t *testing.T) {
 	testutil.AssertNoError(t, err, "")
 
 	//block3
-	simulator, _ = env.txmgr.NewTxSimulator("test_tx_4")
+	txid = util2.GenerateUUID()
+	simulator, _ = env.txmgr.NewTxSimulator(txid)
 	simulator.DeleteState("ns1", "key7")
 	simulator.Done()
 	simRes, _ = simulator.GetTxSimulationResults()
@@ -165,7 +172,7 @@ func TestHistory(t *testing.T) {
 		if kmod == nil {
 			break
 		}
-		txid := kmod.(*queryresult.KeyModification).TxId
+		txid = kmod.(*queryresult.KeyModification).TxId
 		retrievedValue := kmod.(*queryresult.KeyModification).Value
 		retrievedTimestamp := kmod.(*queryresult.KeyModification).Timestamp
 		retrievedIsDelete := kmod.(*queryresult.KeyModification).IsDelete
@@ -200,7 +207,8 @@ func TestHistoryForInvalidTran(t *testing.T) {
 	testutil.AssertNoError(t, env.testHistoryDB.Commit(gb), "")
 
 	//block1
-	simulator, _ := env.txmgr.NewTxSimulator("test_tx_1")
+	txid := util2.GenerateUUID()
+	simulator, _ := env.txmgr.NewTxSimulator(txid)
 	value1 := []byte("value1")
 	simulator.SetState("ns1", "key7", value1)
 	simulator.Done()

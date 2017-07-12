@@ -116,7 +116,8 @@ func putCCInfoWithVSCCAndVer(theLedger ledger.PeerLedger, ccname, vscc, ver stri
 
 	cdbytes := utils.MarshalOrPanic(cd)
 
-	simulator, err := theLedger.NewTxSimulator()
+	txid := util.GenerateUUID()
+	simulator, err := theLedger.NewTxSimulator(txid)
 	assert.NoError(t, err)
 	simulator.SetState("lscc", ccname, cdbytes)
 	simulator.Done()

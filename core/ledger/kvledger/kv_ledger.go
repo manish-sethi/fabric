@@ -228,9 +228,9 @@ func (l *kvLedger) PrivateDataMinBlockNum() (uint64, error) {
 }
 
 // NewTxSimulator returns new `ledger.TxSimulator`
-func (l *kvLedger) NewTxSimulator() (ledger.TxSimulator, error) {
+func (l *kvLedger) NewTxSimulator(txid string) (ledger.TxSimulator, error) {
 	//TODO get txid from chaincode
-	return l.txtmgmt.NewTxSimulator(util.GenerateUUID())
+	return l.txtmgmt.NewTxSimulator(txid)
 }
 
 // NewQueryExecutor gives handle to a query executor.
