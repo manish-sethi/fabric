@@ -263,7 +263,7 @@ func addBlockForTesting(t *testing.T, chainid string) *common.Block {
 	simulator.SetState("ns1", "key3", []byte("value3"))
 	simulator.Done()
 	simRes1, _ := simulator.GetTxSimulationResults()
-	pubSimRes1 := simRes1.PubDataSimulationResults
+	pubSimResBytes1, _ := simRes1.GetPubSimulationBytes()
 
 	txid2 := util.GenerateUUID()
 	simulator, _ = ledger.NewTxSimulator(txid2)
@@ -272,9 +272,9 @@ func addBlockForTesting(t *testing.T, chainid string) *common.Block {
 	simulator.SetState("ns2", "key6", []byte("value6"))
 	simulator.Done()
 	simRes2, _ := simulator.GetTxSimulationResults()
-	pubSimRes2 := simRes2.PubDataSimulationResults
+	pubSimResBytes2, _ := simRes2.GetPubSimulationBytes()
 
-	block1 := bg.NextBlock([][]byte{pubSimRes1, pubSimRes2})
+	block1 := bg.NextBlock([][]byte{pubSimResBytes1, pubSimResBytes2})
 	ledger.Commit(block1)
 
 	return block1

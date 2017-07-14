@@ -86,6 +86,13 @@ func TestNsRwSetConversion(t *testing.T) {
 	testutil.AssertEquals(t, nsRwSet1, nsRwSet)
 }
 
+func TestNsRWSetConversionNoCollHashedRWs(t *testing.T) {
+	nsRwSet := sampleNsRwSetWithNoCollHashedRWs("ns-1")
+	protoMsg, err := nsRwSet.toProtoMsg()
+	testutil.AssertNoError(t, err, "")
+	testutil.AssertNil(t, protoMsg.CollectionHashedRwset)
+}
+
 func TestCollHashedRwSetConversion(t *testing.T) {
 	collHashedRwSet := sampleCollHashedRwSet("coll-1")
 	protoMsg, err := collHashedRwSet.toProtoMsg()
@@ -108,6 +115,10 @@ func sampleNsRwSet(ns string) *NsRwSet {
 	nsRwSet.CollHashedRwSet = append(nsRwSet.CollHashedRwSet, sampleCollHashedRwSet("coll-1"))
 	nsRwSet.CollHashedRwSet = append(nsRwSet.CollHashedRwSet, sampleCollHashedRwSet("coll-2"))
 	return nsRwSet
+}
+
+func sampleNsRwSetWithNoCollHashedRWs(ns string) *NsRwSet {
+	return &NsRwSet{NameSpace: ns, KvRwSet: sampleKvRwSet()}
 }
 
 func sampleKvRwSet() *kvrwset.KVRWSet {

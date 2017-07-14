@@ -57,8 +57,8 @@ func TestBlockValidation(t *testing.T) {
 	simulator.Done()
 
 	simRes, _ := simulator.GetTxSimulationResults()
-
-	_, err := testutil.ConstructBytesProposalResponsePayload("v1", simRes.PubDataSimulationResults)
+	pubSimulationResBytes, _ := simRes.GetPubSimulationBytes()
+	_, err := testutil.ConstructBytesProposalResponsePayload("v1", pubSimulationResBytes)
 	if err != nil {
 		t.Fatalf("Could not construct ProposalResponsePayload bytes, err: %s", err)
 	}
@@ -70,7 +70,7 @@ func TestBlockValidation(t *testing.T) {
 	testutil.AssertEquals(t, bcInfo, &common.BlockchainInfo{
 		Height: 1, CurrentBlockHash: gbHash, PreviousBlockHash: nil})
 
-	block := testutil.ConstructBlock(t, 1, gbHash, [][]byte{simRes.PubDataSimulationResults}, true)
+	block := testutil.ConstructBlock(t, 1, gbHash, [][]byte{pubSimulationResBytes}, true)
 
 	tValidator.Validate(block)
 

@@ -43,7 +43,7 @@ func ConstructAppInstance(ledger ledger.PeerLedger) *App {
 func (app *App) Init(initialBalances map[string]int) (*common.Envelope, error) {
 	var txSimulator ledger.TxSimulator
 	var err error
-	if txSimulator, err = app.ledger.NewTxSimulator(); err != nil {
+	if txSimulator, err = app.ledger.NewTxSimulator(util.GenerateUUID()); err != nil {
 		return nil, err
 	}
 	defer txSimulator.Done()
@@ -51,10 +51,14 @@ func (app *App) Init(initialBalances map[string]int) (*common.Envelope, error) {
 		txSimulator.SetState(app.name, accountID, toBytes(bal))
 	}
 	var txSimulationResults *ledger.TxSimulationResults
+	var pubSimBytes []byte
 	if txSimulationResults, err = txSimulator.GetTxSimulationResults(); err != nil {
 		return nil, err
 	}
-	tx := constructTransaction(txSimulationResults.PubDataSimulationResults)
+	if pubSimBytes, err = txSimulationResults.GetPubSimulationBytes(); err != nil {
+		return nil, err
+	}
+	tx := constructTransaction(pubSimBytes)
 	return tx, nil
 }
 
@@ -63,7 +67,7 @@ func (app *App) TransferFunds(fromAccount string, toAccount string, transferAmt 
 	// act as endorsing peer shim code to simulate a transaction on behalf of chaincode
 	var txSimulator ledger.TxSimulator
 	var err error
-	if txSimulator, err = app.ledger.NewTxSimulator(); err != nil {
+	if txSimulator, err = app.ledger.NewTxSimulator(util.GenerateUUID()); err != nil {
 		return nil, err
 	}
 	defer txSimulator.Done()
@@ -88,10 +92,13 @@ func (app *App) TransferFunds(fromAccount string, toAccount string, transferAmt 
 	if txSimulationResults, err = txSimulator.GetTxSimulationResults(); err != nil {
 		return nil, err
 	}
-
+	var pubSimBytes []byte
+	if pubSimBytes, err = txSimulationResults.GetPubSimulationBytes(); err != nil {
+		return nil, err
+	}
 	// act as endorsing peer to create an Action with the SimulationResults
 	// then act as SDK to create a Transaction with the EndorsedAction
-	tx := constructTransaction(txSimulationResults.PubDataSimulationResults)
+	tx := constructTransaction(pubSimBytes)
 	return tx, nil
 }
 

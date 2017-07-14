@@ -26,14 +26,23 @@ import (
 // LockBasedTxSimulator is a transaction simulator used in `LockBasedTxMgr`
 type lockBasedTxSimulator struct {
 	lockBasedQueryExecutor
-	rwsetBuilder *rwsetutil.RWSetBuilder
+	rwsetBuilder    *rwsetutil.RWSetBuilder
+	simulationBlkHt uint64
 }
 
-func newLockBasedTxSimulator(txmgr *LockBasedTxMgr, txid string) *lockBasedTxSimulator {
+func newLockBasedTxSimulator(txmgr *LockBasedTxMgr, txid string) (*lockBasedTxSimulator, error) {
 	rwsetBuilder := rwsetutil.NewRWSetBuilder()
 	helper := &queryHelper{txmgr: txmgr, rwsetBuilder: rwsetBuilder}
 	logger.Debugf("constructing new tx simulator txid = [%s]", txid)
-	return &lockBasedTxSimulator{lockBasedQueryExecutor{helper, txid}, rwsetBuilder}
+	ver, err := txmgr.GetLastSavepoint()
+	if err != nil {
+		return nil, err
+	}
+	simulationBlkHt := uint64(0)
+	if ver != nil {
+		simulationBlkHt = ver.BlockNum
+	}
+	return &lockBasedTxSimulator{lockBasedQueryExecutor{helper, txid}, rwsetBuilder, simulationBlkHt}, nil
 }
 
 // GetState implements method in interface `ledger.TxSimulator`
@@ -97,22 +106,7 @@ func (s *lockBasedTxSimulator) GetTxSimulationResults() (*ledger.TxSimulationRes
 	if s.helper.err != nil {
 		return nil, s.helper.err
 	}
-	txRwSet := s.rwsetBuilder.GetTxReadWriteSet()
-	txPvtRwSet := s.rwsetBuilder.GetTxPvtReadWriteSet()
-	pubSimulationRes, err := txRwSet.ToProtoBytes()
-	if err != nil {
-		return nil, err
-	}
-	pvtSimulationRes, err := txPvtRwSet.ToProtoBytes()
-	if err != nil {
-		return nil, err
-	}
-	return &ledger.TxSimulationResults{
-		PubDataSimulationResults: pubSimulationRes,
-		PvtDataSimulationResults: pvtSimulationRes,
-		// TODO take block height in the begining
-		SimulationBlkHt: 2,
-	}, nil
+	return s.rwsetBuilder.GetTxSimulationResults()
 }
 
 // ExecuteUpdate implements method in interface `ledger.TxSimulator`
