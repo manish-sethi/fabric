@@ -57,7 +57,8 @@ func TestKVLedgerBlockStorage(t *testing.T) {
 	simulator.SetState("ns1", "key3", []byte("value3"))
 	simulator.Done()
 	simRes, _ := simulator.GetTxSimulationResults()
-	block1 := bg.NextBlock([][]byte{simRes.PubDataSimulationResults})
+	pubSimBytes, _ := simRes.GetPubSimulationBytes()
+	block1 := bg.NextBlock([][]byte{pubSimBytes})
 	ledger.Commit(block1)
 
 	bcInfo, _ = ledger.GetBlockchainInfo()
@@ -72,7 +73,8 @@ func TestKVLedgerBlockStorage(t *testing.T) {
 	simulator.SetState("ns1", "key3", []byte("value6"))
 	simulator.Done()
 	simRes, _ = simulator.GetTxSimulationResults()
-	block2 := bg.NextBlock([][]byte{simRes.PubDataSimulationResults})
+	pubSimBytes, _ = simRes.GetPubSimulationBytes()
+	block2 := bg.NextBlock([][]byte{pubSimBytes})
 	ledger.Commit(block2)
 
 	bcInfo, _ = ledger.GetBlockchainInfo()
@@ -141,8 +143,9 @@ func TestKVLedgerDBRecovery(t *testing.T) {
 	simulator.SetState("ns1", "key3", []byte("value3.1"))
 	simulator.Done()
 	simRes, _ := simulator.GetTxSimulationResults()
+	pubSimBytes, _ := simRes.GetPubSimulationBytes()
 	//generating a block based on the simulation result
-	block1 := bg.NextBlock([][]byte{simRes.PubDataSimulationResults})
+	block1 := bg.NextBlock([][]byte{pubSimBytes})
 	//performing validation of read and write set to find valid transactions
 	ledger.Commit(block1)
 	bcInfo, _ = ledger.GetBlockchainInfo()
@@ -162,8 +165,9 @@ func TestKVLedgerDBRecovery(t *testing.T) {
 	simulator.SetState("ns1", "key3", []byte("value3.2"))
 	simulator.Done()
 	simRes, _ = simulator.GetTxSimulationResults()
+	pubSimBytes, _ = simRes.GetPubSimulationBytes()
 	//generating a block based on the simulation result
-	block2 := bg.NextBlock([][]byte{simRes.PubDataSimulationResults})
+	block2 := bg.NextBlock([][]byte{pubSimBytes})
 
 	//performing validation of read and write set to find valid transactions
 	ledger.(*kvLedger).txtmgmt.ValidateAndPrepare(block2, true)
@@ -277,8 +281,9 @@ func TestKVLedgerDBRecovery(t *testing.T) {
 	simulator.SetState("ns1", "key3", []byte("value3.3"))
 	simulator.Done()
 	simRes, _ = simulator.GetTxSimulationResults()
+	pubSimBytes, _ = simRes.GetPubSimulationBytes()
 	//generating a block based on the simulation result
-	block3 := bg.NextBlock([][]byte{simRes.PubDataSimulationResults})
+	block3 := bg.NextBlock([][]byte{pubSimBytes})
 	//performing validation of read and write set to find valid transactions
 	ledger.(*kvLedger).txtmgmt.ValidateAndPrepare(block3, true)
 	//writing the validated block to block storage
@@ -380,8 +385,9 @@ func TestKVLedgerDBRecovery(t *testing.T) {
 	simulator.SetState("ns1", "key3", []byte("value3.4"))
 	simulator.Done()
 	simRes, _ = simulator.GetTxSimulationResults()
+	pubSimBytes, _ = simRes.GetPubSimulationBytes()
 	//generating a block based on the simulation result
-	block4 := bg.NextBlock([][]byte{simRes.PubDataSimulationResults})
+	block4 := bg.NextBlock([][]byte{pubSimBytes})
 	//performing validation of read and write set to find valid transactions
 	ledger.(*kvLedger).txtmgmt.ValidateAndPrepare(block4, true)
 	//writing the validated block to block storage but fails to commit to state DB but
@@ -486,7 +492,8 @@ func TestLedgerWithCouchDbEnabledWithBinaryAndJSONData(t *testing.T) {
 	simulator.SetState("ns1", "key7", []byte("{\"shipmentID\":\"161003PKC7600\",\"customsInvoice\":{\"methodOfTransport\":\"AIR MAYBE\",\"invoiceNumber\":\"00091624\"},\"weightUnitOfMeasure\":\"KGM\",\"volumeUnitOfMeasure\": \"CO\",\"dimensionUnitOfMeasure\":\"CM\",\"currency\":\"USD\"}"))
 	simulator.Done()
 	simRes, _ := simulator.GetTxSimulationResults()
-	block1 := bg.NextBlock([][]byte{simRes.PubDataSimulationResults})
+	pubSimBytes, _ := simRes.GetPubSimulationBytes()
+	block1 := bg.NextBlock([][]byte{pubSimBytes})
 
 	ledger.Commit(block1)
 
@@ -505,7 +512,8 @@ func TestLedgerWithCouchDbEnabledWithBinaryAndJSONData(t *testing.T) {
 	simulator.SetState("ns1", "key8", []byte("{\"shipmentID\":\"161003PKC7700\",\"customsInvoice\":{\"methodOfTransport\":\"SHIP\",\"invoiceNumber\":\"00091625\"},\"weightUnitOfMeasure\":\"KGM\",\"volumeUnitOfMeasure\": \"CO\",\"dimensionUnitOfMeasure\":\"CM\",\"currency\":\"USD\"}"))
 	simulator.Done()
 	simRes, _ = simulator.GetTxSimulationResults()
-	simulationResults = append(simulationResults, simRes.PubDataSimulationResults)
+	pubSimBytes, _ = simRes.GetPubSimulationBytes()
+	simulationResults = append(simulationResults, pubSimBytes)
 	//add a 2nd transaction
 	txid2 := util.GenerateUUID()
 	simulator2, _ := ledger.NewTxSimulator(txid2)
@@ -514,7 +522,8 @@ func TestLedgerWithCouchDbEnabledWithBinaryAndJSONData(t *testing.T) {
 	simulator2.SetState("ns1", "key10", []byte("{\"shipmentID\":\"261003PKC8000\",\"customsInvoice\":{\"methodOfTransport\":\"DONKEY\",\"invoiceNumber\":\"00091626\"},\"weightUnitOfMeasure\":\"KGM\",\"volumeUnitOfMeasure\": \"CO\",\"dimensionUnitOfMeasure\":\"CM\",\"currency\":\"USD\"}"))
 	simulator2.Done()
 	simRes2, _ := simulator2.GetTxSimulationResults()
-	simulationResults = append(simulationResults, simRes2.PubDataSimulationResults)
+	pubSimBytes2, _ := simRes2.GetPubSimulationBytes()
+	simulationResults = append(simulationResults, pubSimBytes2)
 
 	block2 := bg.NextBlock(simulationResults)
 	ledger.Commit(block2)
@@ -652,7 +661,8 @@ func TestKVLedgerTransientStore(t *testing.T) {
 	simulator.SetState("ns1", "key3", []byte("value3"))
 	simulator.Done()
 	simRes, _ := simulator.GetTxSimulationResults()
-	block1 := bg.NextBlock([][]byte{simRes.PubDataSimulationResults})
+	pubSimBytes, _ := simRes.GetPubSimulationBytes()
+	block1 := bg.NextBlock([][]byte{pubSimBytes})
 	ledger.Commit(block1)
 
 	bcInfo, _ = ledger.GetBlockchainInfo()

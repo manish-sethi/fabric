@@ -18,8 +18,10 @@ package rwsetutil
 
 import (
 	"github.com/hyperledger/fabric/common/flogging"
+	"github.com/hyperledger/fabric/core/ledger"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/version"
 	"github.com/hyperledger/fabric/core/ledger/util"
+	"github.com/hyperledger/fabric/protos/ledger/rwset"
 	"github.com/hyperledger/fabric/protos/ledger/rwset/kvrwset"
 )
 
@@ -41,9 +43,10 @@ type nsPubRwBuilder struct {
 }
 
 type collHashRwBuilder struct {
-	collName string
-	readMap  map[string]*kvrwset.KVReadHash
-	writeMap map[string]*kvrwset.KVWriteHash
+	collName    string
+	readMap     map[string]*kvrwset.KVReadHash
+	writeMap    map[string]*kvrwset.KVWriteHash
+	pvtDataHash []byte
 }
 
 type nsPvtRwBuilder struct {
@@ -111,8 +114,49 @@ func (b *RWSetBuilder) AddToPvtAndHashedWriteSet(ns string, coll string, key str
 	return nil
 }
 
+// GetTxSimulationResults returns the proto bytes of public rwset (public data + hashes of private data) and the private rwset for the transaction
+func (b *RWSetBuilder) GetTxSimulationResults() (*ledger.TxSimulationResults, error) {
+	pvtData := b.getTxPvtReadWriteSet()
+	var err error
+
+	var pubDataProto *rwset.TxReadWriteSet
+	var pvtDataProto *rwset.TxPvtReadWriteSet
+
+	// Populate the collection-level hashes into pub rwset and compute the proto bytes for pvt rwset
+	if pvtData != nil {
+		if pvtDataProto, err = pvtData.toProtoMsg(); err != nil {
+			return nil, err
+		}
+		for _, ns := range pvtDataProto.NsPvtRwset {
+			for _, coll := range ns.CollectionPvtRwset {
+				b.setPvtCollectionHash(ns.Namespace, coll.CollectionName, coll.Rwset)
+			}
+		}
+	}
+	// Compute the proto bytes for pub rwset
+	pubSet := b.getTxReadWriteSet()
+	if pubSet != nil {
+		if pubDataProto, err = b.getTxReadWriteSet().toProtoMsg(); err != nil {
+			return nil, err
+		}
+	}
+	return &ledger.TxSimulationResults{
+		PubSimulationResults: pubDataProto,
+		PvtSimulationResults: pvtDataProto,
+	}, nil
+}
+
+func (b *RWSetBuilder) setPvtCollectionHash(ns string, coll string, pvtDataProto []byte) error {
+	collHashedBuilder := b.getOrCreateCollHashedRwBuilder(ns, coll)
+	var err error
+	if collHashedBuilder.pvtDataHash, err = util.ComputeHash(pvtDataProto); err != nil {
+		return err
+	}
+	return nil
+}
+
 // GetTxReadWriteSet returns the read-write set
-func (b *RWSetBuilder) GetTxReadWriteSet() *TxRwSet {
+func (b *RWSetBuilder) getTxReadWriteSet() *TxRwSet {
 	sortedNsPubBuilders := []*nsPubRwBuilder{}
 	util.GetValuesBySortedKeys(&(b.pubRwBuilderMap), &sortedNsPubBuilders)
 
@@ -120,17 +164,23 @@ func (b *RWSetBuilder) GetTxReadWriteSet() *TxRwSet {
 	for _, nsPubRwBuilder := range sortedNsPubBuilders {
 		nsPubRwSets = append(nsPubRwSets, nsPubRwBuilder.build())
 	}
+	if len(nsPubRwSets) == 0 {
+		return nil
+	}
 	return &TxRwSet{NsRwSets: nsPubRwSets}
 }
 
 // GetTxPvtReadWriteSet returns the private read-write set
-func (b *RWSetBuilder) GetTxPvtReadWriteSet() *TxPvtRwSet {
+func (b *RWSetBuilder) getTxPvtReadWriteSet() *TxPvtRwSet {
 	sortedNsPvtBuilders := []*nsPvtRwBuilder{}
 	util.GetValuesBySortedKeys(&(b.pvtRwBuilderMap), &sortedNsPvtBuilders)
 
 	var nsPvtRwSets []*NsPvtRwSet
 	for _, nsPvtRwBuilder := range sortedNsPvtBuilders {
 		nsPvtRwSets = append(nsPvtRwSets, nsPvtRwBuilder.build())
+	}
+	if len(nsPvtRwSets) == 0 {
+		return nil
 	}
 	return &TxPvtRwSet{NsPvtRwSet: nsPvtRwSets}
 }
@@ -180,8 +230,10 @@ func (b *collHashRwBuilder) build() *CollHashedRwSet {
 	return &CollHashedRwSet{
 		CollectionName: b.collName,
 		HashedRwSet: &kvrwset.HashedRWSet{
-			HashedReads: readSet, HashedWrites: writeSet,
+			HashedReads:  readSet,
+			HashedWrites: writeSet,
 		},
+		PvtRwSetHash: b.pvtDataHash,
 	}
 }
 
@@ -254,6 +306,7 @@ func newCollHashRwBuilder(collName string) *collHashRwBuilder {
 		collName,
 		make(map[string]*kvrwset.KVReadHash),
 		make(map[string]*kvrwset.KVWriteHash),
+		nil,
 	}
 }
 

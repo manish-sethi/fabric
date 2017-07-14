@@ -69,10 +69,10 @@ func createRWset(t *testing.T, ccnames ...string) []byte {
 	for _, ccname := range ccnames {
 		rwsetBuilder.AddToWriteSet(ccname, "key", []byte("value"))
 	}
-	rwset := rwsetBuilder.GetTxReadWriteSet()
-	rws, err := rwset.ToProtoBytes()
+	rwset, err := rwsetBuilder.GetTxSimulationResults()
 	assert.NoError(t, err)
-	return rws
+	rwsetBytes, err := rwset.GetPubSimulationBytes()
+	return rwsetBytes
 }
 
 func getProposal(ccID string) (*peer.Proposal, error) {
@@ -124,7 +124,9 @@ func putCCInfoWithVSCCAndVer(theLedger ledger.PeerLedger, ccname, vscc, ver stri
 
 	simRes, err := simulator.GetTxSimulationResults()
 	assert.NoError(t, err)
-	block0 := testutil.ConstructBlock(t, 1, []byte("hash"), [][]byte{simRes.PubDataSimulationResults}, true)
+	pubSimulationBytes, err := simRes.GetPubSimulationBytes()
+	assert.NoError(t, err)
+	block0 := testutil.ConstructBlock(t, 1, []byte("hash"), [][]byte{pubSimulationBytes}, true)
 	err = theLedger.Commit(block0)
 	assert.NoError(t, err)
 }

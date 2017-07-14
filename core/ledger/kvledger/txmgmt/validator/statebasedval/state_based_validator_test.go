@@ -59,17 +59,17 @@ func TestValidator(t *testing.T) {
 	rwsetBuilder1 := rwsetutil.NewRWSetBuilder()
 	rwsetBuilder1.AddToReadSet("ns1", "key1", version.NewHeight(1, 0))
 	rwsetBuilder1.AddToReadSet("ns2", "key2", nil)
-	checkValidation(t, validator, []*rwsetutil.TxRwSet{rwsetBuilder1.GetTxReadWriteSet()}, nil, []int{})
+	checkValidation(t, validator, getTestPubSimulationRWSet(t, rwsetBuilder1), nil, []int{})
 
 	//rwset2 should not be valid
 	rwsetBuilder2 := rwsetutil.NewRWSetBuilder()
 	rwsetBuilder2.AddToReadSet("ns1", "key1", version.NewHeight(1, 1))
-	checkValidation(t, validator, []*rwsetutil.TxRwSet{rwsetBuilder2.GetTxReadWriteSet()}, nil, []int{0})
+	checkValidation(t, validator, getTestPubSimulationRWSet(t, rwsetBuilder2), nil, []int{0})
 
 	//rwset3 should not be valid
 	rwsetBuilder3 := rwsetutil.NewRWSetBuilder()
 	rwsetBuilder3.AddToReadSet("ns1", "key1", nil)
-	checkValidation(t, validator, []*rwsetutil.TxRwSet{rwsetBuilder3.GetTxReadWriteSet()}, nil, []int{0})
+	checkValidation(t, validator, getTestPubSimulationRWSet(t, rwsetBuilder3), nil, []int{0})
 
 	// rwset4 and rwset5 within same block - rwset4 should be valid and makes rwset5 as invalid
 	rwsetBuilder4 := rwsetutil.NewRWSetBuilder()
@@ -78,8 +78,7 @@ func TestValidator(t *testing.T) {
 
 	rwsetBuilder5 := rwsetutil.NewRWSetBuilder()
 	rwsetBuilder5.AddToReadSet("ns1", "key1", version.NewHeight(1, 0))
-	checkValidation(t, validator,
-		[]*rwsetutil.TxRwSet{rwsetBuilder4.GetTxReadWriteSet(), rwsetBuilder5.GetTxReadWriteSet()}, nil, []int{1})
+	checkValidation(t, validator, getTestPubSimulationRWSet(t, rwsetBuilder4, rwsetBuilder5), nil, []int{1})
 }
 
 func TestValidatorSkipInvalidTxs(t *testing.T) {
@@ -98,7 +97,7 @@ func TestValidatorSkipInvalidTxs(t *testing.T) {
 	flags := util.NewTxValidationFlags(4)
 	flags.SetFlag(1, peer.TxValidationCode_BAD_CREATOR_SIGNATURE)
 	checkValidation(t, validator,
-		[]*rwsetutil.TxRwSet{rwsetBuilder1.GetTxReadWriteSet(), rwsetBuilder2.GetTxReadWriteSet(), rwsetBuilder3.GetTxReadWriteSet()},
+		getTestPubSimulationRWSet(t, rwsetBuilder1, rwsetBuilder2, rwsetBuilder3),
 		flags, []int{1})
 }
 
@@ -127,7 +126,7 @@ func TestPhantomValidation(t *testing.T) {
 		rwsetutil.NewKVRead("key2", version.NewHeight(1, 1)),
 		rwsetutil.NewKVRead("key3", version.NewHeight(1, 2))})
 	rwsetBuilder1.AddToRangeQuerySet("ns1", rqi1)
-	checkValidation(t, validator, []*rwsetutil.TxRwSet{rwsetBuilder1.GetTxReadWriteSet()}, nil, []int{})
+	checkValidation(t, validator, getTestPubSimulationRWSet(t, rwsetBuilder1), nil, []int{})
 
 	//rwset2 should not be valid - Version of key4 changed
 	rwsetBuilder2 := rwsetutil.NewRWSetBuilder()
@@ -137,7 +136,7 @@ func TestPhantomValidation(t *testing.T) {
 		rwsetutil.NewKVRead("key3", version.NewHeight(1, 2)),
 		rwsetutil.NewKVRead("key4", version.NewHeight(1, 2))})
 	rwsetBuilder2.AddToRangeQuerySet("ns1", rqi2)
-	checkValidation(t, validator, []*rwsetutil.TxRwSet{rwsetBuilder2.GetTxReadWriteSet()}, nil, []int{0})
+	checkValidation(t, validator, getTestPubSimulationRWSet(t, rwsetBuilder2), nil, []int{0})
 
 	//rwset3 should not be valid - simulate key3 got committed to db
 	rwsetBuilder3 := rwsetutil.NewRWSetBuilder()
@@ -146,7 +145,7 @@ func TestPhantomValidation(t *testing.T) {
 		rwsetutil.NewKVRead("key2", version.NewHeight(1, 1)),
 		rwsetutil.NewKVRead("key4", version.NewHeight(1, 3))})
 	rwsetBuilder3.AddToRangeQuerySet("ns1", rqi3)
-	checkValidation(t, validator, []*rwsetutil.TxRwSet{rwsetBuilder3.GetTxReadWriteSet()}, nil, []int{0})
+	checkValidation(t, validator, getTestPubSimulationRWSet(t, rwsetBuilder3), nil, []int{0})
 
 	// //Remove a key in rwset4 and rwset5 should become invalid
 	rwsetBuilder4 := rwsetutil.NewRWSetBuilder()
@@ -158,8 +157,7 @@ func TestPhantomValidation(t *testing.T) {
 		rwsetutil.NewKVRead("key3", version.NewHeight(1, 2)),
 		rwsetutil.NewKVRead("key4", version.NewHeight(1, 3))})
 	rwsetBuilder5.AddToRangeQuerySet("ns1", rqi5)
-	checkValidation(t, validator, []*rwsetutil.TxRwSet{
-		rwsetBuilder4.GetTxReadWriteSet(), rwsetBuilder5.GetTxReadWriteSet()}, nil, []int{1})
+	checkValidation(t, validator, getTestPubSimulationRWSet(t, rwsetBuilder4, rwsetBuilder5), nil, []int{1})
 
 	//Add a key in rwset6 and rwset7 should become invalid
 	rwsetBuilder6 := rwsetutil.NewRWSetBuilder()
@@ -172,8 +170,7 @@ func TestPhantomValidation(t *testing.T) {
 		rwsetutil.NewKVRead("key3", version.NewHeight(1, 2)),
 		rwsetutil.NewKVRead("key4", version.NewHeight(1, 3))})
 	rwsetBuilder7.AddToRangeQuerySet("ns1", rqi7)
-	checkValidation(t, validator, []*rwsetutil.TxRwSet{
-		rwsetBuilder6.GetTxReadWriteSet(), rwsetBuilder7.GetTxReadWriteSet()}, nil, []int{1})
+	checkValidation(t, validator, getTestPubSimulationRWSet(t, rwsetBuilder6, rwsetBuilder7), nil, []int{1})
 }
 
 func TestPhantomHashBasedValidation(t *testing.T) {
@@ -211,7 +208,7 @@ func TestPhantomHashBasedValidation(t *testing.T) {
 	}
 	rqi1.SetMerkelSummary(buildTestHashResults(t, 2, kvReadsDuringSimulation1))
 	rwsetBuilder1.AddToRangeQuerySet("ns1", rqi1)
-	checkValidation(t, validator, []*rwsetutil.TxRwSet{rwsetBuilder1.GetTxReadWriteSet()}, nil, []int{})
+	checkValidation(t, validator, getTestPubSimulationRWSet(t, rwsetBuilder1), nil, []int{})
 
 	rwsetBuilder2 := rwsetutil.NewRWSetBuilder()
 	rqi2 := &kvrwset.RangeQueryInfo{StartKey: "key1", EndKey: "key9", ItrExhausted: false}
@@ -228,17 +225,11 @@ func TestPhantomHashBasedValidation(t *testing.T) {
 	}
 	rqi2.SetMerkelSummary(buildTestHashResults(t, 2, kvReadsDuringSimulation2))
 	rwsetBuilder2.AddToRangeQuerySet("ns1", rqi2)
-	checkValidation(t, validator, []*rwsetutil.TxRwSet{rwsetBuilder2.GetTxReadWriteSet()}, nil, []int{0})
+	checkValidation(t, validator, getTestPubSimulationRWSet(t, rwsetBuilder2), nil, []int{0})
 }
 
-func checkValidation(t *testing.T, validator *Validator, rwsets []*rwsetutil.TxRwSet,
+func checkValidation(t *testing.T, validator *Validator, simulationResults [][]byte,
 	alreadyMarkedFlags util.TxValidationFlags, expectedInvalidTxIndexes []int) {
-	simulationResults := [][]byte{}
-	for _, txRWS := range rwsets {
-		sr, err := txRWS.ToProtoBytes()
-		testutil.AssertNoError(t, err, "")
-		simulationResults = append(simulationResults, sr)
-	}
 	block := testutil.ConstructBlock(t, 1, []byte("dummyPreviousHash"), simulationResults, false)
 	block.Metadata.Metadata[common.BlockMetadataIndex_TRANSACTIONS_FILTER] = alreadyMarkedFlags
 	_, err := validator.ValidateAndPrepareBatch(block, true)
@@ -266,4 +257,16 @@ func buildTestHashResults(t *testing.T, maxDegree int, kvReads []*kvrwset.KVRead
 	testutil.AssertNoError(t, err, "")
 	testutil.AssertNotNil(t, h)
 	return h
+}
+
+func getTestPubSimulationRWSet(t *testing.T, builders ...*rwsetutil.RWSetBuilder) [][]byte {
+	simulationResults := [][]byte{}
+	for _, b := range builders {
+		s, e := b.GetTxSimulationResults()
+		testutil.AssertNoError(t, e, "")
+		sBytes, err := s.GetPubSimulationBytes()
+		testutil.AssertNoError(t, err, "")
+		simulationResults = append(simulationResults, sBytes)
+	}
+	return simulationResults
 }

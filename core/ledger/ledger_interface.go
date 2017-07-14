@@ -17,8 +17,10 @@ limitations under the License.
 package ledger
 
 import (
+	"github.com/golang/protobuf/proto"
 	commonledger "github.com/hyperledger/fabric/common/ledger"
 	"github.com/hyperledger/fabric/protos/common"
+	"github.com/hyperledger/fabric/protos/ledger/rwset"
 	"github.com/hyperledger/fabric/protos/peer"
 )
 
@@ -184,7 +186,17 @@ type EndorserPrivateSimulationResults struct {
 // the field 'SimulationBlkHt' captures the approximate height of the blockchain on which
 // the transaction is simulated - this is used to decide when to expire the 'PvtDataSimulationResults' from transient storage
 type TxSimulationResults struct {
-	PubDataSimulationResults []byte
-	PvtDataSimulationResults []byte
-	SimulationBlkHt          uint64
+	PubSimulationResults *rwset.TxReadWriteSet
+	PvtSimulationResults *rwset.TxPvtReadWriteSet
+	SimulationBlkHt      uint64
+}
+
+// GetPubSimulationBytes returns the serialized bytes of public readwrite set
+func (txSim *TxSimulationResults) GetPubSimulationBytes() ([]byte, error) {
+	return proto.Marshal(txSim.PubSimulationResults)
+}
+
+// GetPvtSimulationBytes returns the serialized bytes of private readwrite set
+func (txSim *TxSimulationResults) GetPvtSimulationBytes() ([]byte, error) {
+	return proto.Marshal(txSim.PvtSimulationResults)
 }
