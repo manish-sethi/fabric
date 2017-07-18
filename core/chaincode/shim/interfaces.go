@@ -1,6 +1,8 @@
 /*
 Copyright IBM Corp. 2016 All Rights Reserved.
 
+SPDX-License-Identifier: Apache-2.0
+
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
@@ -162,6 +164,61 @@ type ChaincodeStubInterface interface {
 	// should therefore not use GetHistoryForKey as part of transactions that
 	// update ledger, and should limit use to read-only chaincode operations.
 	GetHistoryForKey(key string) (HistoryQueryIteratorInterface, error)
+
+	// GetPrivateData returns the value of the specified `key` from the specified
+	// `collection`. Note that GetPrivateData doesn't read data from the
+	// private writeset, which has not been committed to the `collection`. In other words,
+	// GetPrivateData doesn't consider data modified by PutPrivateData that has not been committed.
+	GetPrivateData(collection, key string) ([]byte, error)
+
+	// PutPrivateData puts the specified `key` and `value` into the transaction's
+	// private writeset. PutPrivateData doesn't effect the `collection`
+	// until the transaction is validated and successfully committed.
+	// Simple keys must not be an empty string and must not start with null
+	// character (0x00), in order to avoid range query collisions with
+	// composite keys, which internally get prefixed with 0x00 as composite
+	// key namespace.
+	PutPrivateData(collection string, key string, value []byte) error
+
+	// in the private writeset of the transaction proposal. The `key` and its value will be deleted from
+	// the `collection` when the transaction is validated and successfully committed.
+	DelPrivateData(collection, key string) error
+
+	// GetPrivateDataByRange returns a range iterator over a set of keys in the
+	// given private collection. The iterator can be used to iterate over all keys
+	// between the startKey (inclusive) and endKey (exclusive).
+	// The keys are returned by the iterator in lexical order. Note
+	// that startKey and endKey can be empty string, which implies unbounded range
+	// query on start or end.
+	// Call Close() on the returned StateQueryIteratorInterface object when done.
+	// The query is re-executed during validation phase to ensure result set
+	// has not changed since transaction endorsement (phantom reads detected).
+	GetPrivateDataByRange(collection, startKey, endKey string) (StateQueryIteratorInterface, error)
+
+	// GetPrivateDataByPartialCompositeKey queries the state in the given private
+	// collection based on a given partial composite key. This function returns an iterator
+	// which can be used to iterate over all composite keys whose prefix matches
+	// the given partial composite key. The `objectType` and attributes are
+	// expected to have only valid utf8 strings and should not contain
+	// U+0000 (nil byte) and U+10FFFF (biggest and unallocated code point).
+	// See related functions SplitCompositeKey and CreateCompositeKey.
+	// Call Close() on the returned StateQueryIteratorInterface object when done.
+	// The query is re-executed during validation phase to ensure result set
+	// has not changed since transaction endorsement (phantom reads detected).
+	GetPrivateDataByPartialCompositeKey(collection, objectType string, keys []string) (StateQueryIteratorInterface, error)
+
+	// GetPrivateDataQueryResult performs a "rich" query against a given private
+	// collection. It is only supported for state databases that support rich query,
+	// e.g.CouchDB. The query string is in the native syntax
+	// of the underlying state database. An iterator is returned
+	// which can be used to iterate (next) over the query result set.
+	// The query is NOT re-executed during validation phase, phantom reads are
+	// not detected. That is, other committed transactions may have added,
+	// updated, or removed keys that impact the result set, and this would not
+	// be detected at validation/commit time.  Applications susceptible to this
+	// should therefore not use GetQueryResult as part of transactions that update
+	// ledger, and should limit use to read-only chaincode operations.
+	GetPrivateDataQueryResult(collection, query string) (StateQueryIteratorInterface, error)
 
 	// GetCreator returns `SignatureHeader.Creator` (e.g. an identity)
 	// of the `SignedProposal`. This is the identity of the agent (or user)

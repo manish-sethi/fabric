@@ -1,6 +1,8 @@
 /*
 Copyright IBM Corp. 2016 All Rights Reserved.
 
+SPDX-License-Identifier: Apache-2.0
+
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
@@ -142,6 +144,33 @@ func (stub *MockStub) MockInvokeWithSignedProposal(uuid string, args [][]byte, s
 	res := stub.cc.Invoke(stub)
 	stub.MockTransactionEnd(uuid)
 	return res
+}
+
+func (stub *MockStub) GetPrivateData(collection string, key string) ([]byte, error) {
+	return nil, errors.New("Not Implemented")
+}
+
+func (stub *MockStub) PutPrivateData(collection string, key string, value []byte) error {
+	return errors.New("Not Implemented")
+}
+
+func (stub *MockStub) DelPrivateData(collection string, key string) error {
+	return errors.New("Not Implemented")
+}
+
+func (stub *MockStub) GetPrivateDataByRange(collection, startKey, endKey string) (StateQueryIteratorInterface, error) {
+	return nil, errors.New("Not Implemented")
+}
+
+func (stub *MockStub) GetPrivateDataByPartialCompositeKey(collection, objectType string, attributes []string) (StateQueryIteratorInterface, error) {
+	return nil, errors.New("Not Implemented")
+}
+
+func (stub *MockStub) GetPrivateDataQueryResult(collection, query string) (StateQueryIteratorInterface, error) {
+	// Not implemented since the mock engine does not have a query engine.
+	// However, a very simple query engine that supports string matching
+	// could be implemented to test that the framework supports queries
+	return nil, errors.New("Not Implemented")
 }
 
 // GetState retrieves the value for a given key from the ledger
