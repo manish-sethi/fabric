@@ -237,16 +237,19 @@ func endTxSimulation(chainID string, ccid *pb.ChaincodeID, txsim ledger.TxSimula
 	if lgr := peer.GetLedger(chainID); lgr != nil {
 		if commit {
 			var txSimulationResults *ledger.TxSimulationResults
+			var txSimulationBytes []byte
 			var err error
 
 			//get simulation results
 			if txSimulationResults, err = txsim.GetTxSimulationResults(); err != nil {
 				return err
 			}
-
+			if txSimulationBytes, err = txSimulationResults.GetPubSimulationBytes(); err != nil {
+				return nil
+			}
 			// assemble a (signed) proposal response message
 			resp, err := putils.CreateProposalResponse(prop.Header, prop.Payload, &pb.Response{Status: 200},
-				txSimulationResults.PubDataSimulationResults, nil, ccid, nil, signer)
+				txSimulationBytes, nil, ccid, nil, signer)
 			if err != nil {
 				return err
 			}

@@ -63,7 +63,10 @@ func (txmgr *LockBasedTxMgr) NewQueryExecutor(txid string) (ledger.QueryExecutor
 // NewTxSimulator implements method in interface `txmgmt.TxMgr`
 func (txmgr *LockBasedTxMgr) NewTxSimulator(txid string) (ledger.TxSimulator, error) {
 	logger.Debugf("constructing new tx simulator")
-	s := newLockBasedTxSimulator(txmgr, txid)
+	s, err := newLockBasedTxSimulator(txmgr, txid)
+	if err != nil {
+		return nil, err
+	}
 	txmgr.commitRWLock.RLock()
 	return s, nil
 }

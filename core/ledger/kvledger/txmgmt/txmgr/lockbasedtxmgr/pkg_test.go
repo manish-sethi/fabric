@@ -19,11 +19,13 @@ package lockbasedtxmgr
 import (
 	"testing"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/hyperledger/fabric/common/ledger/testutil"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/privacyenabledstate"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/txmgr"
 	"github.com/hyperledger/fabric/core/ledger/util"
 	"github.com/hyperledger/fabric/protos/common"
+	"github.com/hyperledger/fabric/protos/ledger/rwset"
 )
 
 type testEnv interface {
@@ -98,8 +100,9 @@ func newTxMgrTestHelper(t *testing.T, txMgr txmgr.TxMgr) *txMgrTestHelper {
 	return &txMgrTestHelper{t, txMgr, bg}
 }
 
-func (h *txMgrTestHelper) validateAndCommitRWSet(txRWSet []byte) {
-	block := h.bg.NextBlock([][]byte{txRWSet})
+func (h *txMgrTestHelper) validateAndCommitRWSet(txRWSet *rwset.TxReadWriteSet) {
+	rwSetBytes, _ := proto.Marshal(txRWSet)
+	block := h.bg.NextBlock([][]byte{rwSetBytes})
 	err := h.txMgr.ValidateAndPrepare(block, true)
 	testutil.AssertNoError(h.t, err, "")
 	txsFltr := util.TxValidationFlags(block.Metadata.Metadata[common.BlockMetadataIndex_TRANSACTIONS_FILTER])
@@ -114,8 +117,9 @@ func (h *txMgrTestHelper) validateAndCommitRWSet(txRWSet []byte) {
 	testutil.AssertNoError(h.t, err, "")
 }
 
-func (h *txMgrTestHelper) checkRWsetInvalid(txRWSet []byte) {
-	block := h.bg.NextBlock([][]byte{txRWSet})
+func (h *txMgrTestHelper) checkRWsetInvalid(txRWSet *rwset.TxReadWriteSet) {
+	rwSetBytes, _ := proto.Marshal(txRWSet)
+	block := h.bg.NextBlock([][]byte{rwSetBytes})
 	err := h.txMgr.ValidateAndPrepare(block, true)
 	testutil.AssertNoError(h.t, err, "")
 	txsFltr := util.TxValidationFlags(block.Metadata.Metadata[common.BlockMetadataIndex_TRANSACTIONS_FILTER])
