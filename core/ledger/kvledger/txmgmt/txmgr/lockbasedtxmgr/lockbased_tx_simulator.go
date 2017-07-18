@@ -26,23 +26,14 @@ import (
 // LockBasedTxSimulator is a transaction simulator used in `LockBasedTxMgr`
 type lockBasedTxSimulator struct {
 	lockBasedQueryExecutor
-	rwsetBuilder    *rwsetutil.RWSetBuilder
-	simulationBlkHt uint64
+	rwsetBuilder *rwsetutil.RWSetBuilder
 }
 
 func newLockBasedTxSimulator(txmgr *LockBasedTxMgr, txid string) (*lockBasedTxSimulator, error) {
 	rwsetBuilder := rwsetutil.NewRWSetBuilder()
 	helper := &queryHelper{txmgr: txmgr, rwsetBuilder: rwsetBuilder}
 	logger.Debugf("constructing new tx simulator txid = [%s]", txid)
-	ver, err := txmgr.GetLastSavepoint()
-	if err != nil {
-		return nil, err
-	}
-	simulationBlkHt := uint64(0)
-	if ver != nil {
-		simulationBlkHt = ver.BlockNum
-	}
-	return &lockBasedTxSimulator{lockBasedQueryExecutor{helper, txid}, rwsetBuilder, simulationBlkHt}, nil
+	return &lockBasedTxSimulator{lockBasedQueryExecutor{helper, txid}, rwsetBuilder}, nil
 }
 
 // GetState implements method in interface `ledger.TxSimulator`
