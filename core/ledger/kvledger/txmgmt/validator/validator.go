@@ -17,11 +17,11 @@ limitations under the License.
 package validator
 
 import (
-	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/statedb"
+	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/privacyenabledstate"
 	"github.com/hyperledger/fabric/protos/common"
 )
 
-// Validator validates a rwset
+// Validator validates the transactions present in a block and returns a batch that should be used to update the state
 type Validator interface {
-	ValidateAndPrepareBatch(block *common.Block, doMVCCValidation bool) (*statedb.UpdateBatch, error)
+	ValidateAndPrepareBatch(block *common.Block, doMVCCValidation bool) (*privacyenabledstate.UpdateBatch, error)
 }

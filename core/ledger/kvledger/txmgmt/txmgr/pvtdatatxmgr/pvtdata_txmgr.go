@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package transienthandlertxmgr
+package pvtdatatxmgr
 
 import (
 	"github.com/hyperledger/fabric/common/flogging"
@@ -37,7 +37,7 @@ type TransisentHandlerTxMgr struct {
 
 // NewLockbasedTxMgr constructs a new instance of TransisentHandlerTxMgr
 func NewLockbasedTxMgr(db privacyenabledstate.DB, tStore pvtrwstorage.TransientStore) *TransisentHandlerTxMgr {
-	return &TransisentHandlerTxMgr{lockbasedtxmgr.NewLockBasedTxMgr(db), tStore}
+	return &TransisentHandlerTxMgr{lockbasedtxmgr.NewLockBasedTxMgr(db, tStore), tStore}
 }
 
 // NewTxSimulator extends the implementation of this function in the wrapped txmgr.

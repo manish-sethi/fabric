@@ -27,7 +27,7 @@ import (
 // TransientStoreEnv provides the transient store env for testing
 type TransientStoreEnv struct {
 	t                          testing.TB
-	testTransientStoreProvider TransientStoreProvider
+	TestTransientStoreProvider TransientStoreProvider
 	TestTransientStore         TransientStore
 }
 
@@ -43,7 +43,7 @@ func NewTestTransientStoreEnv(t *testing.T) *TransientStoreEnv {
 
 // Cleanup cleansup the transient store env after testing
 func (env *TransientStoreEnv) Cleanup() {
-	env.testTransientStoreProvider.Close()
+	env.TestTransientStoreProvider.Close()
 	removeTransientStorePath(env.t)
 }
 

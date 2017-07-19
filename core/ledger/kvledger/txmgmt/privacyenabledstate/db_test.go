@@ -33,8 +33,8 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-func TestPvtDataBatch(t *testing.T) {
-	batch := NewPvtDataBatch()
+func TestBatch(t *testing.T) {
+	batch := UpdateMap(make(map[string]nsBatch))
 	v := version.NewHeight(1, 1)
 	for i := 0; i < 5; i++ {
 		for j := 0; j < 5; j++ {
@@ -60,6 +60,21 @@ func TestPvtDataBatch(t *testing.T) {
 	assert.Nil(t, batch.Get("ns-5", "collection-1", "key-1"))
 }
 
+func TestHashBatchContains(t *testing.T) {
+	batch := NewHashedUpdateBatch()
+	batch.Put("ns1", "coll1", []byte("key1"), []byte("val1"), version.NewHeight(1, 1))
+	assert.True(t, batch.Contains("ns1", "coll1", []byte("key1")))
+	assert.False(t, batch.Contains("ns1", "coll1", []byte("key2")))
+	assert.False(t, batch.Contains("ns1", "coll2", []byte("key1")))
+	assert.False(t, batch.Contains("ns2", "coll1", []byte("key1")))
+
+	batch.Delete("ns1", "coll1", []byte("deleteKey"), version.NewHeight(1, 1))
+	assert.True(t, batch.Contains("ns1", "coll1", []byte("deleteKey")))
+	assert.False(t, batch.Contains("ns1", "coll1", []byte("deleteKey1")))
+	assert.False(t, batch.Contains("ns1", "coll2", []byte("deleteKey")))
+	assert.False(t, batch.Contains("ns2", "coll1", []byte("deleteKey")))
+}
+
 func TestDB(t *testing.T) {
 	for _, env := range testEnvs {
 		t.Run(env.GetName(), func(t *testing.T) {
@@ -73,18 +88,16 @@ func testDB(t *testing.T, env TestEnv) {
 	defer env.Cleanup()
 	db := env.GetDBHandle("test-ledger-id")
 
-	pubDataBatch := statedb.NewUpdateBatch()
-	pvtDataBatch := NewPvtDataBatch()
-	hashesBatch := NewPvtDataBatch()
+	updates := NewUpdateBatch()
 
-	pubDataBatch.Put("ns1", "key1", []byte("value1"), version.NewHeight(1, 1))
-	pubDataBatch.Put("ns1", "key2", []byte("value2"), version.NewHeight(1, 2))
-	pubDataBatch.Put("ns2", "key3", []byte("value3"), version.NewHeight(1, 3))
+	updates.PubUpdates.Put("ns1", "key1", []byte("value1"), version.NewHeight(1, 1))
+	updates.PubUpdates.Put("ns1", "key2", []byte("value2"), version.NewHeight(1, 2))
+	updates.PubUpdates.Put("ns2", "key3", []byte("value3"), version.NewHeight(1, 3))
 
-	putToBatches(t, pvtDataBatch, hashesBatch, "ns1", "coll1", "key1", []byte("pvt_value1"), version.NewHeight(1, 4))
-	putToBatches(t, pvtDataBatch, hashesBatch, "ns1", "coll1", "key2", []byte("pvt_value2"), version.NewHeight(1, 5))
-	putToBatches(t, pvtDataBatch, hashesBatch, "ns2", "coll1", "key3", []byte("pvt_value3"), version.NewHeight(1, 6))
-	db.ApplyPubPvtAndHashUpdates(pubDataBatch, pvtDataBatch, hashesBatch, version.NewHeight(2, 6))
+	putPvtUpdates(t, updates, "ns1", "coll1", "key1", []byte("pvt_value1"), version.NewHeight(1, 4))
+	putPvtUpdates(t, updates, "ns1", "coll1", "key2", []byte("pvt_value2"), version.NewHeight(1, 5))
+	putPvtUpdates(t, updates, "ns2", "coll1", "key3", []byte("pvt_value3"), version.NewHeight(1, 6))
+	db.ApplyPrivacyAwareUpdates(updates, version.NewHeight(2, 6))
 
 	vv, err := db.GetState("ns1", "key1")
 	assert.NoError(t, err)
@@ -98,12 +111,10 @@ func testDB(t *testing.T, env TestEnv) {
 	assert.NoError(t, err)
 	assert.Equal(t, &statedb.VersionedValue{Value: testComputeHash(t, []byte("pvt_value1")), Version: version.NewHeight(1, 4)}, vv)
 
-	pubDataBatch = statedb.NewUpdateBatch()
-	pvtDataBatch = NewPvtDataBatch()
-	hashesBatch = NewPvtDataBatch()
-	pubDataBatch.Delete("ns1", "key1", version.NewHeight(2, 7))
-	deleteToBatches(t, pvtDataBatch, hashesBatch, "ns1", "coll1", "key1", version.NewHeight(2, 7))
-	db.ApplyPubPvtAndHashUpdates(pubDataBatch, pvtDataBatch, hashesBatch, version.NewHeight(2, 7))
+	updates = NewUpdateBatch()
+	updates.PubUpdates.Delete("ns1", "key1", version.NewHeight(2, 7))
+	deletePvtUpdates(t, updates, "ns1", "coll1", "key1", version.NewHeight(2, 7))
+	db.ApplyPrivacyAwareUpdates(updates, version.NewHeight(2, 7))
 
 	vv, err = db.GetState("ns1", "key1")
 	assert.NoError(t, err)
@@ -132,12 +143,12 @@ func testComputeHash(t *testing.T, b []byte) []byte {
 	return hash
 }
 
-func putToBatches(t *testing.T, pvtDataBatch PvtDataBatch, hashesBatch PvtDataBatch, ns, coll, key string, value []byte, ver *version.Height) {
-	pvtDataBatch.Put(ns, coll, key, value, ver)
-	hashesBatch.Put(ns, coll, string(testComputeStringHash(t, key)), testComputeHash(t, value), ver)
+func putPvtUpdates(t *testing.T, updates *UpdateBatch, ns, coll, key string, value []byte, ver *version.Height) {
+	updates.PvtUpdates.Put(ns, coll, key, value, ver)
+	updates.HashUpdates.Put(ns, coll, testComputeStringHash(t, key), testComputeHash(t, value), ver)
 }
 
-func deleteToBatches(t *testing.T, pvtDataBatch PvtDataBatch, hashesBatch PvtDataBatch, ns, coll, key string, ver *version.Height) {
-	pvtDataBatch.Delete(ns, coll, key, ver)
-	hashesBatch.Delete(ns, coll, string(testComputeStringHash(t, key)), ver)
+func deletePvtUpdates(t *testing.T, updates *UpdateBatch, ns, coll, key string, ver *version.Height) {
+	updates.PvtUpdates.Delete(ns, coll, key, ver)
+	updates.HashUpdates.Delete(ns, coll, testComputeStringHash(t, key), ver)
 }

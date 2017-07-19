@@ -35,6 +35,8 @@ import (
 func TestMain(m *testing.M) {
 	ledgertestutil.SetupCoreYAMLConfig()
 	flogging.SetModuleLevel("lockbasedtxmgr", "debug")
+	flogging.SetModuleLevel("statevalidator", "debug")
+	flogging.SetModuleLevel("valimpl", "debug")
 	viper.Set("peer.fileSystemPath", "/tmp/fabric/ledgertests/kvledger/txmgmt/txmgr/lockbasedtxmgr")
 	os.Exit(m.Run())
 }

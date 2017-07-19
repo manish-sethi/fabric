@@ -35,9 +35,9 @@ type TxRwSet struct {
 
 // NsRwSet encapsulates 'kvrwset.KVRWSet' proto message for a specific name space (chaincode)
 type NsRwSet struct {
-	NameSpace       string
-	KvRwSet         *kvrwset.KVRWSet
-	CollHashedRwSet []*CollHashedRwSet
+	NameSpace        string
+	KvRwSet          *kvrwset.KVRWSet
+	CollHashedRwSets []*CollHashedRwSet
 }
 
 // CollHashedRwSet encapsulates 'kvrwset.HashedRWSet' proto message for a specific collection
@@ -58,8 +58,8 @@ type TxPvtRwSet struct {
 
 // NsPvtRwSet represents 'rwset.NsPvtReadWriteSet' proto message
 type NsPvtRwSet struct {
-	NameSpace    string
-	CollPvtRwSet []*CollPvtRwSet
+	NameSpace     string
+	CollPvtRwSets []*CollPvtRwSet
 }
 
 // CollPvtRwSet encapsulates 'kvrwset.KVRWSet' proto message for a private rwset for a specific collection
@@ -157,7 +157,7 @@ func (nsRwSet *NsRwSet) toProtoMsg() (*rwset.NsReadWriteSet, error) {
 	}
 
 	var collHashedRwSetProtoMsg *rwset.CollectionHashedReadWriteSet
-	for _, collHashedRwSet := range nsRwSet.CollHashedRwSet {
+	for _, collHashedRwSet := range nsRwSet.CollHashedRwSets {
 		if collHashedRwSetProtoMsg, err = collHashedRwSet.toProtoMsg(); err != nil {
 			return nil, err
 		}
@@ -177,7 +177,7 @@ func nsRwSetFromProtoMsg(protoMsg *rwset.NsReadWriteSet) (*NsRwSet, error) {
 		if collHashedRwSet, err = collHashedRwSetFromProtoMsg(collHashedRwSetProtoMsg); err != nil {
 			return nil, err
 		}
-		nsRwSet.CollHashedRwSet = append(nsRwSet.CollHashedRwSet, collHashedRwSet)
+		nsRwSet.CollHashedRwSets = append(nsRwSet.CollHashedRwSets, collHashedRwSet)
 	}
 	return nsRwSet, nil
 }
@@ -240,7 +240,7 @@ func (nsPvtRwSet *NsPvtRwSet) toProtoMsg() (*rwset.NsPvtReadWriteSet, error) {
 	protoMsg := &rwset.NsPvtReadWriteSet{Namespace: nsPvtRwSet.NameSpace}
 	var err error
 	var collPvtRwSetProtoMsg *rwset.CollectionPvtReadWriteSet
-	for _, collPvtRwSet := range nsPvtRwSet.CollPvtRwSet {
+	for _, collPvtRwSet := range nsPvtRwSet.CollPvtRwSets {
 		if collPvtRwSetProtoMsg, err = collPvtRwSet.toProtoMsg(); err != nil {
 			return nil, err
 		}
@@ -257,7 +257,7 @@ func nsPvtRwSetFromProtoMsg(protoMsg *rwset.NsPvtReadWriteSet) (*NsPvtRwSet, err
 		if collPvtRwSet, err = collPvtRwSetFromProtoMsg(collPvtRwSetProtoMsg); err != nil {
 			return nil, err
 		}
-		nsPvtRwSet.CollPvtRwSet = append(nsPvtRwSet.CollPvtRwSet, collPvtRwSet)
+		nsPvtRwSet.CollPvtRwSets = append(nsPvtRwSet.CollPvtRwSets, collPvtRwSet)
 	}
 	return nsPvtRwSet, nil
 }
