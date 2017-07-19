@@ -198,5 +198,13 @@ func (txSim *TxSimulationResults) GetPubSimulationBytes() ([]byte, error) {
 
 // GetPvtSimulationBytes returns the serialized bytes of private readwrite set
 func (txSim *TxSimulationResults) GetPvtSimulationBytes() ([]byte, error) {
+	if !txSim.ContainsPvtWrites() {
+		return nil, nil
+	}
 	return proto.Marshal(txSim.PvtSimulationResults)
+}
+
+// ContainsPvtWrites returns true if the simulation results include the private writes
+func (txSim *TxSimulationResults) ContainsPvtWrites() bool {
+	return txSim.PvtSimulationResults != nil
 }
