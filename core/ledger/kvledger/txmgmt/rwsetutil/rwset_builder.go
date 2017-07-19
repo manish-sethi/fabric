@@ -155,7 +155,7 @@ func (b *RWSetBuilder) setPvtCollectionHash(ns string, coll string, pvtDataProto
 	return nil
 }
 
-// GetTxReadWriteSet returns the read-write set
+// getTxReadWriteSet returns the read-write set
 func (b *RWSetBuilder) getTxReadWriteSet() *TxRwSet {
 	sortedNsPubBuilders := []*nsPubRwBuilder{}
 	util.GetValuesBySortedKeys(&(b.pubRwBuilderMap), &sortedNsPubBuilders)
@@ -170,7 +170,7 @@ func (b *RWSetBuilder) getTxReadWriteSet() *TxRwSet {
 	return &TxRwSet{NsRwSets: nsPubRwSets}
 }
 
-// GetTxPvtReadWriteSet returns the private read-write set
+// getTxPvtReadWriteSet returns the private read-write set
 func (b *RWSetBuilder) getTxPvtReadWriteSet() *TxPvtRwSet {
 	sortedNsPvtBuilders := []*nsPvtRwBuilder{}
 	util.GetValuesBySortedKeys(&(b.pvtRwBuilderMap), &sortedNsPvtBuilders)
@@ -205,9 +205,9 @@ func (b *nsPubRwBuilder) build() *NsRwSet {
 		collHashedRwSet = append(collHashedRwSet, collBuilder.build())
 	}
 	return &NsRwSet{
-		NameSpace:       b.namespace,
-		KvRwSet:         &kvrwset.KVRWSet{Reads: readSet, Writes: writeSet, RangeQueriesInfo: rangeQueriesInfo},
-		CollHashedRwSet: collHashedRwSet,
+		NameSpace:        b.namespace,
+		KvRwSet:          &kvrwset.KVRWSet{Reads: readSet, Writes: writeSet, RangeQueriesInfo: rangeQueriesInfo},
+		CollHashedRwSets: collHashedRwSet,
 	}
 }
 
@@ -219,7 +219,7 @@ func (b *nsPvtRwBuilder) build() *NsPvtRwSet {
 	for _, collBuilder := range sortedCollBuilders {
 		collPvtRwSets = append(collPvtRwSets, collBuilder.build())
 	}
-	return &NsPvtRwSet{NameSpace: b.namespace, CollPvtRwSet: collPvtRwSets}
+	return &NsPvtRwSet{NameSpace: b.namespace, CollPvtRwSets: collPvtRwSets}
 }
 
 func (b *collHashRwBuilder) build() *CollHashedRwSet {
