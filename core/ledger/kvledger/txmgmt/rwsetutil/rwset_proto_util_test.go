@@ -112,8 +112,8 @@ func sampleTxRwSet() *TxRwSet {
 func sampleNsRwSet(ns string) *NsRwSet {
 	nsRwSet := &NsRwSet{NameSpace: ns,
 		KvRwSet: sampleKvRwSet()}
-	nsRwSet.CollHashedRwSet = append(nsRwSet.CollHashedRwSet, sampleCollHashedRwSet("coll-1"))
-	nsRwSet.CollHashedRwSet = append(nsRwSet.CollHashedRwSet, sampleCollHashedRwSet("coll-2"))
+	nsRwSet.CollHashedRwSets = append(nsRwSet.CollHashedRwSets, sampleCollHashedRwSet("coll-1"))
+	nsRwSet.CollHashedRwSets = append(nsRwSet.CollHashedRwSets, sampleCollHashedRwSet("coll-2"))
 	return nsRwSet
 }
 
@@ -178,8 +178,8 @@ func sampleTxPvtRwSet() *TxPvtRwSet {
 
 func sampleNsPvtRwSet(ns string) *NsPvtRwSet {
 	nsRwSet := &NsPvtRwSet{NameSpace: ns}
-	nsRwSet.CollPvtRwSet = append(nsRwSet.CollPvtRwSet, sampleCollPvtRwSet("coll-1"))
-	nsRwSet.CollPvtRwSet = append(nsRwSet.CollPvtRwSet, sampleCollPvtRwSet("coll-2"))
+	nsRwSet.CollPvtRwSets = append(nsRwSet.CollPvtRwSets, sampleCollPvtRwSet("coll-1"))
+	nsRwSet.CollPvtRwSets = append(nsRwSet.CollPvtRwSets, sampleCollPvtRwSet("coll-2"))
 	return nsRwSet
 }
 

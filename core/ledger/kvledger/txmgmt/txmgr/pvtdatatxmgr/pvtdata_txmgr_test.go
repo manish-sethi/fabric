@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package transienthandlertxmgr
+package pvtdatatxmgr
 
 import (
 	"os"
@@ -22,43 +22,34 @@ import (
 
 	"github.com/hyperledger/fabric/common/flogging"
 	"github.com/hyperledger/fabric/core/ledger"
-	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/privacyenabledstate"
 	"github.com/hyperledger/fabric/core/ledger/pvtrwstorage"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 )
 
-var (
-	dbTestEnvs = []privacyenabledstate.TestEnv{
-		&privacyenabledstate.LevelDBCommonStorageTestEnv{},
-		&privacyenabledstate.CouchDBCommonStorageTestEnv{},
-	}
-)
-
 func TestMain(m *testing.M) {
 	flogging.SetModuleLevel("transienthandlertxmgr", "debug")
-	viper.Set("peer.fileSystemPath", "/tmp/fabric/ledgertests/kvledger/txmgmt/txmgr/transienthandlertxmgr")
+	viper.Set("peer.fileSystemPath", "/tmp/fabric/ledgertests/kvledger/txmgmt/txmgr/pvtdatatxmgr")
 	os.Exit(m.Run())
 }
 
 func TestTransientHandlerTxmgr(t *testing.T) {
-	for _, dbEnv := range dbTestEnvs {
-		dbEnv.Init(t)
-		defer dbEnv.Cleanup()
-		tStoreTestEnv := pvtrwstorage.NewTestTransientStoreEnv(t)
-		defer tStoreTestEnv.Cleanup()
-		testTransientHandlerTxmgr(t, dbEnv.GetName(), dbEnv.GetDBHandle("test"), tStoreTestEnv.TestTransientStore)
+	for _, testEnv := range TestEnvs {
+		testEnv.Init(t, "testledger")
+		defer testEnv.Cleanup()
+		testTransientHandlerTxmgr(t, testEnv)
 	}
 }
 
-func testTransientHandlerTxmgr(t *testing.T, testcase string, db privacyenabledstate.DB, tStore pvtrwstorage.TransientStore) {
+func testTransientHandlerTxmgr(t *testing.T, testEnv *TestEnv) {
+	testcase := testEnv.Name
 	t.Run(testcase, func(t *testing.T) {
 		// initially the transient store is empty
 		txid := "test-tx-id"
-		initialEntries := retrieveTestEntriesFromTStore(t, tStore, txid)
+		initialEntries := retrieveTestEntriesFromTStore(t, testEnv.TStore, txid)
 		t.Logf("len(initialEntries)=%d", len(initialEntries))
 		assert.Nil(t, initialEntries)
-		txmgr := NewLockbasedTxMgr(db, tStore)
+		txmgr := testEnv.Txmgr
 
 		// run a simulation with only public data and the transient store should be empty at the end
 		sim1, err := txmgr.NewTxSimulator(txid)
@@ -67,7 +58,7 @@ func testTransientHandlerTxmgr(t *testing.T, testcase string, db privacyenableds
 		sim1.SetState("ns1", "key1", []byte("value1"))
 		_, err = sim1.GetTxSimulationResults()
 		assert.NoError(t, err)
-		entriesAfterPubSimulation := retrieveTestEntriesFromTStore(t, tStore, txid)
+		entriesAfterPubSimulation := retrieveTestEntriesFromTStore(t, testEnv.TStore, txid)
 		assert.Nil(t, entriesAfterPubSimulation)
 
 		// run a read-only private simulation and the transient store should be empty at the end
@@ -78,7 +69,7 @@ func testTransientHandlerTxmgr(t *testing.T, testcase string, db privacyenableds
 		sim2.GetPrivateData("ns1", "key1", "coll1")
 		_, err = sim2.GetTxSimulationResults()
 		assert.NoError(t, err)
-		entriesAfterReadOnlyPvtSimulation := retrieveTestEntriesFromTStore(t, tStore, txid)
+		entriesAfterReadOnlyPvtSimulation := retrieveTestEntriesFromTStore(t, testEnv.TStore, txid)
 		assert.Nil(t, entriesAfterReadOnlyPvtSimulation)
 
 		// run a private simulation that inlovles writes and the transient store should have a corresponding entry at the end
@@ -92,9 +83,28 @@ func testTransientHandlerTxmgr(t *testing.T, testcase string, db privacyenableds
 		assert.NoError(t, err)
 		sim3ResBytes, err := sim3Res.GetPvtSimulationBytes()
 		assert.NoError(t, err)
-		entriesAfterWritePvtSimulation := retrieveTestEntriesFromTStore(t, tStore, txid)
+		entriesAfterWritePvtSimulation := retrieveTestEntriesFromTStore(t, testEnv.TStore, txid)
 		assert.Equal(t, 1, len(entriesAfterWritePvtSimulation))
 		assert.Equal(t, sim3ResBytes, entriesAfterWritePvtSimulation[0].PrivateSimulationResults)
+	})
+}
+
+func TestPvtDataSimulation(t *testing.T) {
+	for _, testEnv := range TestEnvs {
+		testPvtDataSimulation(t, testEnv)
+	}
+}
+
+func testPvtDataSimulation(t *testing.T, testEnv *TestEnv) {
+	t.Run(testEnv.Name, func(t *testing.T) {
+		testEnv.Init(t, "testledger")
+		defer testEnv.Cleanup()
+		sim, _ := testEnv.Txmgr.NewTxSimulator("txid1")
+		sim.SetState("ns", "key1", []byte("value1"))
+		sim.SetPrivateData("ns", "coll1", "key1", []byte("pvt-value1"))
+		sim.SetPrivateData("ns", "coll1", "key2", []byte("pvt-value2"))
+		sim.Done()
+		//res, _ := sim.GetTxSimulationResults()
 	})
 }
 
