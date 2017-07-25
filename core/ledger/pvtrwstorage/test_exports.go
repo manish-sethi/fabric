@@ -24,23 +24,26 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-type transientStoreEnv struct {
+// TransientStoreEnv provides the transient store env for testing
+type TransientStoreEnv struct {
 	t                          testing.TB
-	testTransientStoreProvider TransientStoreProvider
-	testTransientStore         TransientStore
+	TestTransientStoreProvider TransientStoreProvider
+	TestTransientStore         TransientStore
 }
 
-func newTestTransientStoreEnv(t *testing.T) *transientStoreEnv {
+// NewTestTransientStoreEnv construct a TransientStoreEnv for testing
+func NewTestTransientStoreEnv(t *testing.T) *TransientStoreEnv {
 	removeTransientStorePath(t)
 	assert := assert.New(t)
 	testTransientStoreProvider := NewTransientStoreProvider()
 	testTransientStore, err := testTransientStoreProvider.OpenStore("TestTransientStore")
 	assert.NoError(err)
-	return &transientStoreEnv{t, testTransientStoreProvider, testTransientStore}
+	return &TransientStoreEnv{t, testTransientStoreProvider, testTransientStore}
 }
 
-func (env *transientStoreEnv) cleanup() {
-	env.testTransientStoreProvider.Close()
+// Cleanup cleansup the transient store env after testing
+func (env *TransientStoreEnv) Cleanup() {
+	env.TestTransientStoreProvider.Close()
 	removeTransientStorePath(env.t)
 }
 

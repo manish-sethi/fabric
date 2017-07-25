@@ -37,33 +37,77 @@ type DB interface {
 	GetPrivateDataMultipleKeys(namespace, collection string, keys []string) ([]*statedb.VersionedValue, error)
 	GetPrivateDataRangeScanIterator(namespace, collection, startKey, endKey string) (statedb.ResultsIterator, error)
 	ExecuteQueryOnPrivateData(namespace, collection, query string) (statedb.ResultsIterator, error)
-	ApplyPubPvtAndHashUpdates(pubDataBatch *statedb.UpdateBatch, pvtDataBatch PvtDataBatch, hashedDataBatch PvtDataBatch, height *version.Height) error
+	ApplyPrivacyAwareUpdates(updates *UpdateBatch, height *version.Height) error
 }
 
-// PvtDataBatch contains either pvt data or hashes of the public data
-type PvtDataBatch map[string]nsBatch
+// UpdateBatch encapsulates the updates to Public, Private, and Hashed data.
+// This is expected to contain a consistent set of updates
+type UpdateBatch struct {
+	PubUpdates  *PubUpdateBatch
+	HashUpdates *HashedUpdateBatch
+	PvtUpdates  *PvtUpdateBatch
+}
 
+// PubUpdateBatch contains update for the public data
+type PubUpdateBatch struct {
+	*statedb.UpdateBatch
+}
+
+// HashedUpdateBatch contains updates for the hashes of the private data
+type HashedUpdateBatch struct {
+	UpdateMap
+}
+
+// PvtUpdateBatch contains updates for the private data
+type PvtUpdateBatch struct {
+	UpdateMap
+}
+
+// UpdateMap maintains entries of tuple <Namespace, UpdatesForNamespace>
+type UpdateMap map[string]nsBatch
+
+// nsBatch contains updates related to one namespace
 type nsBatch struct {
 	*statedb.UpdateBatch
 }
 
-// NewPvtDataBatch creates an empty PvtDataBatch
-func NewPvtDataBatch() PvtDataBatch {
-	return make(map[string]nsBatch)
+// NewUpdateBatch creates and empty UpdateBatch
+func NewUpdateBatch() *UpdateBatch {
+	return &UpdateBatch{NewPubUpdateBatch(), NewHashedUpdateBatch(), NewPvtUpdateBatch()}
+}
+
+// NewPubUpdateBatch creates an empty PubUpdateBatch
+func NewPubUpdateBatch() *PubUpdateBatch {
+	return &PubUpdateBatch{statedb.NewUpdateBatch()}
+}
+
+// NewHashedUpdateBatch creates an empty HashedUpdateBatch
+func NewHashedUpdateBatch() *HashedUpdateBatch {
+	return &HashedUpdateBatch{make(map[string]nsBatch)}
+}
+
+// NewPvtUpdateBatch creates an empty PvtUpdateBatch
+func NewPvtUpdateBatch() *PvtUpdateBatch {
+	return &PvtUpdateBatch{make(map[string]nsBatch)}
+}
+
+// IsEmpty returns true if there exists any updates
+func (b UpdateMap) IsEmpty() bool {
+	return len(b) == 0
 }
 
 // Put sets the value in the batch for a given combination of namespace and collection name
-func (b PvtDataBatch) Put(ns, coll, key string, value []byte, version *version.Height) {
+func (b UpdateMap) Put(ns, coll, key string, value []byte, version *version.Height) {
 	b.getOrCreateNsBatch(ns).Put(coll, key, value, version)
 }
 
 // Delete removes the entry from the batch for a given combination of namespace and collection name
-func (b PvtDataBatch) Delete(ns, coll, key string, version *version.Height) {
+func (b UpdateMap) Delete(ns, coll, key string, version *version.Height) {
 	b.getOrCreateNsBatch(ns).Delete(coll, key, version)
 }
 
 // Get retrieves the value from the bacth for a given combination of namespace and collection name
-func (b PvtDataBatch) Get(ns, coll, key string) *statedb.VersionedValue {
+func (b UpdateMap) Get(ns, coll, key string) *statedb.VersionedValue {
 	nsPvtBatch, ok := b[ns]
 	if !ok {
 		return nil
@@ -75,11 +119,30 @@ func (nsb nsBatch) GetCollectionNames() []string {
 	return nsb.GetUpdatedNamespaces()
 }
 
-func (b PvtDataBatch) getOrCreateNsBatch(ns string) nsBatch {
+func (b UpdateMap) getOrCreateNsBatch(ns string) nsBatch {
 	batch, ok := b[ns]
 	if !ok {
 		batch = nsBatch{statedb.NewUpdateBatch()}
 		b[ns] = batch
 	}
 	return batch
+}
+
+// Contains returns true if the given <ns,coll,keyHash> tuple is present in the batch
+func (h HashedUpdateBatch) Contains(ns, coll string, keyHash []byte) bool {
+	nsBatch, ok := h.UpdateMap[ns]
+	if !ok {
+		return false
+	}
+	return nsBatch.Exists(coll, string(keyHash))
+}
+
+// Put overrides the function in UpdateMap for allowing the key to be a []byte instead of a string
+func (h HashedUpdateBatch) Put(ns, coll string, key []byte, value []byte, version *version.Height) {
+	h.UpdateMap.Put(ns, coll, string(key), value, version)
+}
+
+// Delete overrides the function in UpdateMap for allowing the key to be a []byte instead of a string
+func (h HashedUpdateBatch) Delete(ns, coll string, key []byte, version *version.Height) {
+	h.UpdateMap.Delete(ns, coll, string(key), version)
 }

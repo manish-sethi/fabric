@@ -76,7 +76,7 @@ func TestRWSetKeyCodingEncoding(t *testing.T) {
 }
 
 func TestTransientStorePersistAndRetrieve(t *testing.T) {
-	env := newTestTransientStoreEnv(t)
+	env := NewTestTransientStoreEnv(t)
 	assert := assert.New(t)
 	txid := "txid-1"
 
@@ -102,14 +102,14 @@ func TestTransientStorePersistAndRetrieve(t *testing.T) {
 	// Persist simulation results into transient store
 	var err error
 	for i := 0; i < len(endorsersResults); i++ {
-		err = env.testTransientStore.Persist(txid, endorsersResults[i].EndorserID,
+		err = env.TestTransientStore.Persist(txid, endorsersResults[i].EndorserID,
 			endorsersResults[i].EndorsementBlockHeight, endorsersResults[i].PrivateSimulationResults)
 		assert.NoError(err)
 	}
 
 	// Retrieve simulation results of txid-1 from transient store
 	var iter commonledger.ResultsIterator
-	iter, err = env.testTransientStore.GetTxPrivateRWSetByTxid(txid)
+	iter, err = env.TestTransientStore.GetTxPrivateRWSetByTxid(txid)
 	assert.NoError(err)
 
 	var result commonledger.QueryResult
@@ -127,7 +127,7 @@ func TestTransientStorePersistAndRetrieve(t *testing.T) {
 }
 
 func TestTransientStorePurge(t *testing.T) {
-	env := newTestTransientStoreEnv(t)
+	env := NewTestTransientStoreEnv(t)
 	assert := assert.New(t)
 
 	txid := "txid-1"
@@ -178,19 +178,19 @@ func TestTransientStorePurge(t *testing.T) {
 	// Persist simulation results into transient store
 	var err error
 	for i := 0; i < 5; i++ {
-		err = env.testTransientStore.Persist(txid, endorsersResults[i].EndorserID,
+		err = env.TestTransientStore.Persist(txid, endorsersResults[i].EndorserID,
 			endorsersResults[i].EndorsementBlockHeight, endorsersResults[i].PrivateSimulationResults)
 		assert.NoError(err)
 	}
 
 	// Retain results generate at block height greater than or equal to 12
 	minEndorsementBlkHtToRetain := uint64(12)
-	err = env.testTransientStore.Purge(minEndorsementBlkHtToRetain)
+	err = env.TestTransientStore.Purge(minEndorsementBlkHtToRetain)
 	assert.NoError(err)
 
 	// Retrieve simulation results of txid-1 from transient store
 	var iter commonledger.ResultsIterator
-	iter, err = env.testTransientStore.GetTxPrivateRWSetByTxid(txid)
+	iter, err = env.TestTransientStore.GetTxPrivateRWSetByTxid(txid)
 	assert.NoError(err)
 
 	// Expected results for txid-1
@@ -215,24 +215,24 @@ func TestTransientStorePurge(t *testing.T) {
 
 	// Get the minimum retained endorsement block height
 	var actualMinEndorsementBlkHt uint64
-	actualMinEndorsementBlkHt, err = env.testTransientStore.GetMinEndorsementBlkHt()
+	actualMinEndorsementBlkHt, err = env.TestTransientStore.GetMinEndorsementBlkHt()
 	assert.NoError(err)
 	assert.Equal(minEndorsementBlkHtToRetain, actualMinEndorsementBlkHt)
 
 	// Retain results generate at block height greater than or equal to 15
 	minEndorsementBlkHtToRetain = uint64(15)
-	err = env.testTransientStore.Purge(minEndorsementBlkHtToRetain)
+	err = env.TestTransientStore.Purge(minEndorsementBlkHtToRetain)
 	assert.NoError(err)
 
 	// There should be no entries in the transient store
-	actualMinEndorsementBlkHt, err = env.testTransientStore.GetMinEndorsementBlkHt()
+	actualMinEndorsementBlkHt, err = env.TestTransientStore.GetMinEndorsementBlkHt()
 	assert.Equal(err, ErrTransientStoreEmpty)
 
 	// Retain results generate at block height greater than or equal to 15
 	minEndorsementBlkHtToRetain = uint64(15)
-	err = env.testTransientStore.Purge(minEndorsementBlkHtToRetain)
+	err = env.TestTransientStore.Purge(minEndorsementBlkHtToRetain)
 	// Should not return any error
 	assert.NoError(err)
 
-	env.cleanup()
+	env.Cleanup()
 }

@@ -108,16 +108,15 @@ func (s CommonStorageDB) ExecuteQueryOnPrivateData(namespace, collection, query 
 
 // ApplyUpdates overrides the funciton in statedb.VersionedDB and throws appropriate message
 // TODO uncomment the following when integration of new code is done
-// func (s *CommonStorageDB) ApplyUpdates(batch *statedb.UpdateBatch, height *version.Height) error {
+// func (s *CommonStorageDB) ApplyUpdates(batch *statedb.Batch, height *version.Height) error {
 // 	return fmt.Errorf("This function should not be invoked. Please invoke function 'ApplyPubPvtAndHashUpdates'")
 // }
 
-// ApplyPubPvtAndHashUpdates implements corresponding function in interface PrivacyAwareVersionedDB
-func (s *CommonStorageDB) ApplyPubPvtAndHashUpdates(
-	pubDataBatch *statedb.UpdateBatch, pvtDataBatch PvtDataBatch, hashedDataBatch PvtDataBatch, height *version.Height) error {
-	updateBatchWithPvtData(pubDataBatch, pvtDataBatch)
-	updateBatchWithHashedData(pubDataBatch, hashedDataBatch, !s.BytesKeySuppoted())
-	return s.ApplyUpdates(pubDataBatch, height)
+// ApplyPrivacyAwareUpdates implements corresponding function in interface PrivacyAwareVersionedDB
+func (s *CommonStorageDB) ApplyPrivacyAwareUpdates(updates *UpdateBatch, height *version.Height) error {
+	addPvtUpdates(updates.PubUpdates, updates.PvtUpdates)
+	addHashedUpdates(updates.PubUpdates, updates.HashUpdates, !s.BytesKeySuppoted())
+	return s.ApplyUpdates(updates.PubUpdates.UpdateBatch, height)
 }
 
 func derivePvtDataNs(namespace, collection string) string {
@@ -128,24 +127,24 @@ func deriveHashedDataNs(namespace, collection string) string {
 	return namespace + nsJoiner + hashDataPrefix + collection
 }
 
-func updateBatchWithPvtData(masterBatch *statedb.UpdateBatch, pvtDataBatch PvtDataBatch) {
-	for ns, nsBatch := range pvtDataBatch {
+func addPvtUpdates(pubUpdateBatch *PubUpdateBatch, pvtUpdateBatch *PvtUpdateBatch) {
+	for ns, nsBatch := range pvtUpdateBatch.UpdateMap {
 		for _, coll := range nsBatch.GetCollectionNames() {
 			for key, vv := range nsBatch.GetUpdates(coll) {
-				masterBatch.Update(derivePvtDataNs(ns, coll), key, vv)
+				pubUpdateBatch.Update(derivePvtDataNs(ns, coll), key, vv)
 			}
 		}
 	}
 }
 
-func updateBatchWithHashedData(masterBatch *statedb.UpdateBatch, pvtDataBatch PvtDataBatch, base64Key bool) {
-	for ns, nsBatch := range pvtDataBatch {
+func addHashedUpdates(pubUpdateBatch *PubUpdateBatch, hashedUpdateBatch *HashedUpdateBatch, base64Key bool) {
+	for ns, nsBatch := range hashedUpdateBatch.UpdateMap {
 		for _, coll := range nsBatch.GetCollectionNames() {
 			for key, vv := range nsBatch.GetUpdates(coll) {
 				if base64Key {
 					key = base64.StdEncoding.EncodeToString([]byte(key))
 				}
-				masterBatch.Update(deriveHashedDataNs(ns, coll), key, vv)
+				pubUpdateBatch.Update(deriveHashedDataNs(ns, coll), key, vv)
 			}
 		}
 	}

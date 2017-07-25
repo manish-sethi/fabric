@@ -135,7 +135,7 @@ func (meqe *mockExecQuerySimulator) GetTxSimulationResults() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return simRes.PubDataSimulationResults, nil
+	return simRes.GetPubSimulationBytes()
 }
 
 //initialize peer and start up. If security==enabled, login as vp

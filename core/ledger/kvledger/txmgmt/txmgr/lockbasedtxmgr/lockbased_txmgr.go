@@ -22,10 +22,10 @@ import (
 	"github.com/hyperledger/fabric/common/flogging"
 	"github.com/hyperledger/fabric/core/ledger"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/privacyenabledstate"
-	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/statedb"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/validator"
-	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/validator/statebasedval"
+	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/validator/valimpl"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/version"
+	"github.com/hyperledger/fabric/core/ledger/pvtrwstorage"
 	"github.com/hyperledger/fabric/protos/common"
 )
 
@@ -36,15 +36,15 @@ var logger = flogging.MustGetLogger("lockbasedtxmgr")
 type LockBasedTxMgr struct {
 	db           privacyenabledstate.DB
 	validator    validator.Validator
-	batch        *statedb.UpdateBatch
+	batch        *privacyenabledstate.UpdateBatch
 	currentBlock *common.Block
 	commitRWLock sync.RWMutex
 }
 
 // NewLockBasedTxMgr constructs a new instance of NewLockBasedTxMgr
-func NewLockBasedTxMgr(db privacyenabledstate.DB) *LockBasedTxMgr {
+func NewLockBasedTxMgr(db privacyenabledstate.DB, tStore pvtrwstorage.TransientStore) *LockBasedTxMgr {
 	db.Open()
-	return &LockBasedTxMgr{db: db, validator: statebasedval.NewValidator(db)}
+	return &LockBasedTxMgr{db: db, validator: valimpl.NewStatebasedValidator(db, tStore)}
 }
 
 // GetLastSavepoint returns the block num recorded in savepoint,
@@ -63,7 +63,10 @@ func (txmgr *LockBasedTxMgr) NewQueryExecutor(txid string) (ledger.QueryExecutor
 // NewTxSimulator implements method in interface `txmgmt.TxMgr`
 func (txmgr *LockBasedTxMgr) NewTxSimulator(txid string) (ledger.TxSimulator, error) {
 	logger.Debugf("constructing new tx simulator")
-	s := newLockBasedTxSimulator(txmgr, txid)
+	s, err := newLockBasedTxSimulator(txmgr, txid)
+	if err != nil {
+		return nil, err
+	}
 	txmgr.commitRWLock.RLock()
 	return s, nil
 }
@@ -95,7 +98,7 @@ func (txmgr *LockBasedTxMgr) Commit() error {
 		panic("validateAndPrepare() method should have been called before calling commit()")
 	}
 	defer func() { txmgr.batch = nil }()
-	if err := txmgr.db.ApplyUpdates(txmgr.batch,
+	if err := txmgr.db.ApplyPrivacyAwareUpdates(txmgr.batch,
 		version.NewHeight(txmgr.currentBlock.Header.Number, uint64(len(txmgr.currentBlock.Data.Data)-1))); err != nil {
 		return err
 	}

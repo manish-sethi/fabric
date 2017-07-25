@@ -29,11 +29,14 @@ import (
 	ledgertestutil "github.com/hyperledger/fabric/core/ledger/testutil"
 	"github.com/hyperledger/fabric/protos/ledger/queryresult"
 	"github.com/spf13/viper"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestMain(m *testing.M) {
 	ledgertestutil.SetupCoreYAMLConfig()
 	flogging.SetModuleLevel("lockbasedtxmgr", "debug")
+	flogging.SetModuleLevel("statevalidator", "debug")
+	flogging.SetModuleLevel("valimpl", "debug")
 	viper.Set("peer.fileSystemPath", "/tmp/fabric/ledgertests/kvledger/txmgmt/txmgr/lockbasedtxmgr")
 	os.Exit(m.Run())
 }
@@ -63,6 +66,10 @@ func testTxSimulatorWithNoExistingData(t *testing.T, env testEnv) {
 
 	value, _ = s.GetState("ns2", "key3")
 	testutil.AssertNil(t, value)
+
+	simulationResults, err := s.GetTxSimulationResults()
+	assert.NoError(t, err)
+	assert.Nil(t, simulationResults.PvtSimulationResults)
 }
 
 func TestTxSimulatorWithExistingData(t *testing.T) {
@@ -88,7 +95,7 @@ func testTxSimulatorWithExistingData(t *testing.T, env testEnv) {
 	s1.Done()
 	// validate and commit RWset
 	txRWSet1, _ := s1.GetTxSimulationResults()
-	txMgrHelper.validateAndCommitRWSet(txRWSet1.PubDataSimulationResults)
+	txMgrHelper.validateAndCommitRWSet(txRWSet1.PubSimulationResults)
 
 	// simulate tx2 that make changes to existing data
 	s2, _ := txMgr.NewTxSimulator("test_tx2")
@@ -101,7 +108,7 @@ func testTxSimulatorWithExistingData(t *testing.T, env testEnv) {
 	s2.Done()
 	// validate and commit RWset for tx2
 	txRWSet2, _ := s2.GetTxSimulationResults()
-	txMgrHelper.validateAndCommitRWSet(txRWSet2.PubDataSimulationResults)
+	txMgrHelper.validateAndCommitRWSet(txRWSet2.PubSimulationResults)
 
 	// simulate tx3
 	s3, _ := txMgr.NewTxSimulator("test_tx3")
@@ -140,7 +147,7 @@ func testTxValidation(t *testing.T, env testEnv) {
 	s1.Done()
 	// validate and commit RWset
 	txRWSet1, _ := s1.GetTxSimulationResults()
-	txMgrHelper.validateAndCommitRWSet(txRWSet1.PubDataSimulationResults)
+	txMgrHelper.validateAndCommitRWSet(txRWSet1.PubSimulationResults)
 
 	// simulate tx2 that make changes to existing data.
 	// tx2: Read/Update ns1:key1, Delete ns2:key3.
@@ -188,21 +195,21 @@ func testTxValidation(t *testing.T, env testEnv) {
 
 	// validate and commit RWset for tx2
 	txRWSet2, _ := s2.GetTxSimulationResults()
-	txMgrHelper.validateAndCommitRWSet(txRWSet2.PubDataSimulationResults)
+	txMgrHelper.validateAndCommitRWSet(txRWSet2.PubSimulationResults)
 
 	//RWSet for tx3 and tx4 and tx5 should be invalid now due to read conflicts
 	txRWSet3, _ := s3.GetTxSimulationResults()
-	txMgrHelper.checkRWsetInvalid(txRWSet3.PubDataSimulationResults)
+	txMgrHelper.checkRWsetInvalid(txRWSet3.PubSimulationResults)
 
 	txRWSet4, _ := s4.GetTxSimulationResults()
-	txMgrHelper.checkRWsetInvalid(txRWSet4.PubDataSimulationResults)
+	txMgrHelper.checkRWsetInvalid(txRWSet4.PubSimulationResults)
 
 	txRWSet5, _ := s5.GetTxSimulationResults()
-	txMgrHelper.checkRWsetInvalid(txRWSet5.PubDataSimulationResults)
+	txMgrHelper.checkRWsetInvalid(txRWSet5.PubSimulationResults)
 
 	// tx6 should still be valid as it only writes a new key
 	txRWSet6, _ := s6.GetTxSimulationResults()
-	txMgrHelper.validateAndCommitRWSet(txRWSet6.PubDataSimulationResults)
+	txMgrHelper.validateAndCommitRWSet(txRWSet6.PubSimulationResults)
 }
 
 func TestTxPhantomValidation(t *testing.T) {
@@ -229,7 +236,7 @@ func testTxPhantomValidation(t *testing.T, env testEnv) {
 	s1.Done()
 	// validate and commit RWset
 	txRWSet1, _ := s1.GetTxSimulationResults()
-	txMgrHelper.validateAndCommitRWSet(txRWSet1.PubDataSimulationResults)
+	txMgrHelper.validateAndCommitRWSet(txRWSet1.PubSimulationResults)
 
 	// simulate tx2
 	s2, _ := txMgr.NewTxSimulator("test_tx2")
@@ -268,11 +275,11 @@ func testTxPhantomValidation(t *testing.T, env testEnv) {
 	txRWSet4, _ := s4.GetTxSimulationResults()
 
 	// txRWSet2 should be valid
-	txMgrHelper.validateAndCommitRWSet(txRWSet2.PubDataSimulationResults)
+	txMgrHelper.validateAndCommitRWSet(txRWSet2.PubSimulationResults)
 	// txRWSet2 makes txRWSet3 invalid as it deletes a key in the range
-	txMgrHelper.checkRWsetInvalid(txRWSet3.PubDataSimulationResults)
+	txMgrHelper.checkRWsetInvalid(txRWSet3.PubSimulationResults)
 	// txRWSet4 should be valid as it iterates over a different range
-	txMgrHelper.validateAndCommitRWSet(txRWSet4.PubDataSimulationResults)
+	txMgrHelper.validateAndCommitRWSet(txRWSet4.PubSimulationResults)
 }
 
 func TestIterator(t *testing.T) {
@@ -320,7 +327,7 @@ func testIterator(t *testing.T, env testEnv, numKeys int, startKeyNum int, endKe
 	s.Done()
 	// validate and commit RWset
 	txRWSet, _ := s.GetTxSimulationResults()
-	txMgrHelper.validateAndCommitRWSet(txRWSet.PubDataSimulationResults)
+	txMgrHelper.validateAndCommitRWSet(txRWSet.PubSimulationResults)
 
 	var startKey string
 	var endKey string
@@ -388,14 +395,14 @@ func testIteratorWithDeletes(t *testing.T, env testEnv) {
 	s.Done()
 	// validate and commit RWset
 	txRWSet1, _ := s.GetTxSimulationResults()
-	txMgrHelper.validateAndCommitRWSet(txRWSet1.PubDataSimulationResults)
+	txMgrHelper.validateAndCommitRWSet(txRWSet1.PubSimulationResults)
 
 	s, _ = txMgr.NewTxSimulator("test_tx2")
 	s.DeleteState(cID, createTestKey(4))
 	s.Done()
 	// validate and commit RWset
 	txRWSet2, _ := s.GetTxSimulationResults()
-	txMgrHelper.validateAndCommitRWSet(txRWSet2.PubDataSimulationResults)
+	txMgrHelper.validateAndCommitRWSet(txRWSet2.PubSimulationResults)
 
 	queryExecuter, _ := txMgr.NewQueryExecutor("test_tx3")
 	itr, _ := queryExecuter.GetStateRangeScanIterator(cID, createTestKey(3), createTestKey(6))
@@ -432,7 +439,7 @@ func testTxValidationWithItr(t *testing.T, env testEnv) {
 	s1.Done()
 	// validate and commit RWset
 	txRWSet1, _ := s1.GetTxSimulationResults()
-	txMgrHelper.validateAndCommitRWSet(txRWSet1.PubDataSimulationResults)
+	txMgrHelper.validateAndCommitRWSet(txRWSet1.PubSimulationResults)
 
 	// simulate tx2 that reads key_001 and key_002
 	s2, _ := txMgr.NewTxSimulator("test_tx2")
@@ -459,15 +466,15 @@ func testTxValidationWithItr(t *testing.T, env testEnv) {
 
 	// validate and commit RWset for tx4
 	txRWSet4, _ := s4.GetTxSimulationResults()
-	txMgrHelper.validateAndCommitRWSet(txRWSet4.PubDataSimulationResults)
+	txMgrHelper.validateAndCommitRWSet(txRWSet4.PubSimulationResults)
 
 	//RWSet tx3 should be invalid now
 	txRWSet3, _ := s3.GetTxSimulationResults()
-	txMgrHelper.checkRWsetInvalid(txRWSet3.PubDataSimulationResults)
+	txMgrHelper.checkRWsetInvalid(txRWSet3.PubSimulationResults)
 
 	// tx2 should still be valid
 	txRWSet2, _ := s2.GetTxSimulationResults()
-	txMgrHelper.validateAndCommitRWSet(txRWSet2.PubDataSimulationResults)
+	txMgrHelper.validateAndCommitRWSet(txRWSet2.PubSimulationResults)
 
 }
 
@@ -497,7 +504,7 @@ func testGetSetMultipeKeys(t *testing.T, env testEnv) {
 	s1.Done()
 	// validate and commit RWset
 	txRWSet, _ := s1.GetTxSimulationResults()
-	txMgrHelper.validateAndCommitRWSet(txRWSet.PubDataSimulationResults)
+	txMgrHelper.validateAndCommitRWSet(txRWSet.PubSimulationResults)
 	qe, _ := txMgr.NewQueryExecutor("test_tx2")
 	defer qe.Done()
 	multipleKeys := []string{}
@@ -581,7 +588,7 @@ func testExecuteQuery(t *testing.T, env testEnv) {
 
 	// validate and commit RWset
 	txRWSet, _ := s1.GetTxSimulationResults()
-	txMgrHelper.validateAndCommitRWSet(txRWSet.PubDataSimulationResults)
+	txMgrHelper.validateAndCommitRWSet(txRWSet.PubSimulationResults)
 
 	queryExecuter, _ := txMgr.NewQueryExecutor("test_tx2")
 	queryString := "{\"selector\":{\"owner\": {\"$eq\": \"bob\"}},\"limit\": 10,\"skip\": 0}"
