@@ -35,7 +35,7 @@ var (
 
 // TestEnv reprsents a test txmgr test environment for testing
 type TestEnv struct {
-	t         testing.TB
+	t         *testing.T
 	Name      string
 	LedgerID  string
 	DBEnv     privacyenabledstate.TestEnv
@@ -67,4 +67,9 @@ func (env *TestEnv) Cleanup() {
 	env.Txmgr.Shutdown()
 	env.DBEnv.Cleanup()
 	env.TStoreEnv.Cleanup()
+}
+
+type TestTx struct {
+	ID          string
+	PubSimBytes []byte
 }
