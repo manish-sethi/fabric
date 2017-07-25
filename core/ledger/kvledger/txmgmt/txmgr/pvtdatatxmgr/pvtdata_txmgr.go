@@ -26,7 +26,7 @@ import (
 	"github.com/hyperledger/fabric/core/ledger/pvtrwstorage"
 )
 
-var logger = flogging.MustGetLogger("transienthandlertxmgr")
+var logger = flogging.MustGetLogger("pvtdatatxmgr")
 
 // TransisentHandlerTxMgr wraps a specific txmgr implementation (such as lockbasedtxmgr)
 // and adds the additional functionality of persisting the private writesets into transient store

@@ -27,7 +27,7 @@ import (
 	"github.com/hyperledger/fabric/protos/peer"
 )
 
-var logger = flogging.MustGetLogger("statevalidator")
+var logger = flogging.MustGetLogger("statebasedval")
 
 // Validator validates a tx against the latest committed state
 // and preceding valid transactions with in the same block
@@ -56,8 +56,8 @@ func (v *Validator) ValidateAndPrepareBatch(block *valinternal.Block, doMVCCVali
 			committingTxHeight := version.NewHeight(block.Num, uint64(tx.IndexInBlock))
 			updates.ApplyWriteSet(tx.RWSet, committingTxHeight)
 		} else {
-			logger.Warningf("Block [%d] Transaction index [%d] TxId [%s] marked as invalid by state validator. Reason code [%d]",
-				block.Num, tx.IndexInBlock, tx.ID, validationCode)
+			logger.Warningf("Block [%d] Transaction index [%d] TxId [%s] marked as invalid by state validator. Reason code [%s]",
+				block.Num, tx.IndexInBlock, tx.ID, validationCode.String())
 		}
 	}
 	return updates, nil

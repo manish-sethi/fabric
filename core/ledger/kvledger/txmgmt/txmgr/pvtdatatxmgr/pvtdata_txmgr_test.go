@@ -21,14 +21,22 @@ import (
 	"testing"
 
 	"github.com/hyperledger/fabric/common/flogging"
+	"github.com/hyperledger/fabric/common/ledger/testutil"
 	"github.com/hyperledger/fabric/core/ledger"
+	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/txmgr"
+	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/version"
 	"github.com/hyperledger/fabric/core/ledger/pvtrwstorage"
+	"github.com/hyperledger/fabric/core/ledger/util"
+	"github.com/hyperledger/fabric/protos/common"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestMain(m *testing.M) {
-	flogging.SetModuleLevel("transienthandlertxmgr", "debug")
+	flogging.SetModuleLevel("pvtdatatxmgr", "debug")
+	flogging.SetModuleLevel("statebasedval", "debug")
+	flogging.SetModuleLevel("valimpl", "debug")
+
 	viper.Set("peer.fileSystemPath", "/tmp/fabric/ledgertests/kvledger/txmgmt/txmgr/pvtdatatxmgr")
 	os.Exit(m.Run())
 }
@@ -89,22 +97,88 @@ func testTransientHandlerTxmgr(t *testing.T, testEnv *TestEnv) {
 	})
 }
 
-func TestPvtDataSimulation(t *testing.T) {
+func TestTxsWithPvtData(t *testing.T) {
 	for _, testEnv := range TestEnvs {
-		testPvtDataSimulation(t, testEnv)
+		testTxsWithPvtData(t, testEnv)
 	}
 }
 
-func testPvtDataSimulation(t *testing.T, testEnv *TestEnv) {
+func testTxsWithPvtData(t *testing.T, testEnv *TestEnv) {
 	t.Run(testEnv.Name, func(t *testing.T) {
 		testEnv.Init(t, "testledger")
 		defer testEnv.Cleanup()
-		sim, _ := testEnv.Txmgr.NewTxSimulator("txid1")
-		sim.SetState("ns", "key1", []byte("value1"))
-		sim.SetPrivateData("ns", "coll1", "key1", []byte("pvt-value1"))
-		sim.SetPrivateData("ns", "coll1", "key2", []byte("pvt-value2"))
-		sim.Done()
-		//res, _ := sim.GetTxSimulationResults()
+		bg, _ := testutil.NewBlockGenerator(t, testEnv.LedgerID, false)
+
+		// simulate first tx and commit it
+		txid1 := "txid1"
+		sim1, _ := testEnv.Txmgr.NewTxSimulator(txid1)
+		sim1.SetState("ns", "key1", []byte(txid1+"value1"))
+		sim1.SetPrivateData("ns", "coll1", "key1", []byte(txid1+"pvt-value1"))
+		sim1.SetPrivateData("ns", "coll1", "key2", []byte(txid1+"pvt-value2"))
+		sim1.Done()
+		res1, _ := sim1.GetTxSimulationResults()
+		pubSimBytes1, _ := res1.GetPubSimulationBytes()
+		checkValidateAndCommit(t, bg, testEnv.Txmgr,
+			[]*TestTx{&TestTx{ID: txid1, PubSimBytes: pubSimBytes1}},
+			[]int{},
+		)
+		checkCommittedValue(t, testEnv, "ns", "coll1", "key1", []byte(txid1+"pvt-value1"), version.NewHeight(1, 0))
+
+		// simulate two txs - tx2 and tx3
+		txid2 := "txid2"
+		sim2, _ := testEnv.Txmgr.NewTxSimulator(txid2)
+		_, err := sim2.GetPrivateData("ns", "coll1", "key1")
+		assert.NoError(t, err)
+		sim2.SetPrivateData("ns", "coll1", "key1", []byte(txid2+"pvt-value1"))
+		sim2.Done()
+		res2, _ := sim2.GetTxSimulationResults()
+		pubSimBytes2, _ := res2.GetPubSimulationBytes()
+
+		txid3 := "txid3"
+		sim3, _ := testEnv.Txmgr.NewTxSimulator(txid3)
+		_, err = sim3.GetPrivateData("ns", "coll1", "key1")
+		assert.NoError(t, err)
+		sim3.SetPrivateData("ns", "coll1", "key1", []byte(txid3+"pvt-value1"))
+		sim3.Done()
+		res3, _ := sim3.GetTxSimulationResults()
+		pubSimBytes3, _ := res3.GetPubSimulationBytes()
+		// tx2 should pass but tx3 should fail the validation (because tx3 conflicts with tx2 in the same block on pvt data)
+		checkValidateAndCommit(t, bg, testEnv.Txmgr,
+			[]*TestTx{
+				&TestTx{ID: txid2, PubSimBytes: pubSimBytes2},
+				&TestTx{ID: txid3, PubSimBytes: pubSimBytes3},
+			},
+			[]int{1},
+		)
+		checkCommittedValue(t, testEnv, "ns", "coll1", "key2", []byte(txid1+"pvt-value2"), version.NewHeight(1, 0))
+		checkCommittedValue(t, testEnv, "ns", "coll1", "key1", []byte(txid2+"pvt-value1"), version.NewHeight(2, 0))
+	})
+}
+
+func TestPvtDataWrongTxid(t *testing.T) {
+	for _, testEnv := range TestEnvs {
+		testPvtDataWrongTxid(t, testEnv)
+	}
+}
+
+func testPvtDataWrongTxid(t *testing.T, testEnv *TestEnv) {
+	t.Run(testEnv.Name, func(t *testing.T) {
+		testEnv.Init(t, "testledger")
+		defer testEnv.Cleanup()
+		bg, _ := testutil.NewBlockGenerator(t, testEnv.LedgerID, false)
+
+		txid1 := "txid1"
+		sim1, _ := testEnv.Txmgr.NewTxSimulator(txid1)
+		sim1.SetState("ns", "key1", []byte(txid1+"value1"))
+		sim1.SetPrivateData("ns", "coll1", "key1", []byte(txid1+"pvt-value1"))
+		sim1.SetPrivateData("ns", "coll1", "key2", []byte(txid1+"pvt-value2"))
+		sim1.Done()
+		res1, _ := sim1.GetTxSimulationResults()
+		pubSimBytes1, _ := res1.GetPubSimulationBytes()
+		block := bg.NextBlockWithTxid([][]byte{pubSimBytes1}, []string{"wrongtxid"})
+		err := testEnv.Txmgr.ValidateAndPrepare(block, true)
+		t.Logf("Error is expected.. err:%s", err)
+		testutil.AssertError(t, err, "An error is expected because the transient store won't have pvtrwset for the wrong txid")
 	})
 }
 
@@ -121,4 +195,37 @@ func retrieveTestEntriesFromTStore(t *testing.T, tStore pvtrwstorage.TransientSt
 		results = append(results, result.(*ledger.EndorserPrivateSimulationResults))
 	}
 	return results
+}
+
+func checkValidateAndCommit(t *testing.T, bg *testutil.BlockGenerator, txmgr txmgr.TxMgr, txs []*TestTx, expectedInvalidTxIndexs []int) {
+	var simRes [][]byte
+	var txids []string
+	for _, tx := range txs {
+		simRes = append(simRes, tx.PubSimBytes)
+		txids = append(txids, tx.ID)
+	}
+	block := bg.NextBlockWithTxid(simRes, txids)
+	testutil.AssertNoError(t, txmgr.ValidateAndPrepare(block, true), "")
+	testutil.AssertNoError(t, txmgr.Commit(), "")
+
+	txsFltr := util.TxValidationFlags(block.Metadata.Metadata[common.BlockMetadataIndex_TRANSACTIONS_FILTER])
+	expectedInvalidTxs := make(map[int]bool)
+	for _, i := range expectedInvalidTxIndexs {
+		expectedInvalidTxs[i] = true
+	}
+
+	for i := 0; i < len(block.Data.Data); i++ {
+		if txsFltr.IsValid(i) && expectedInvalidTxs[i] {
+			t.Fatalf("Tx at index %d is expected to be invalid", i)
+		}
+		if txsFltr.IsInvalid(i) && !expectedInvalidTxs[i] {
+			t.Fatalf("Tx at index %d is expected to be valid", i)
+		}
+	}
+}
+
+func checkCommittedValue(t *testing.T, testEnv *TestEnv, ns, coll, key string, expectedVal []byte, expectedVer *version.Height) {
+	vv, _ := testEnv.DB.GetPrivateData(ns, coll, key)
+	testutil.AssertEquals(t, vv.Value, expectedVal)
+	testutil.AssertEquals(t, vv.Version, expectedVer)
 }
