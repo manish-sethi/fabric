@@ -221,8 +221,10 @@ func (v *Validator) validateKVReadHash(ns, coll string, kvReadHash *kvrwset.KVRe
 	if err != nil {
 		return false, err
 	}
-	committedVersion := versionedHash.Version
-
+	var committedVersion *version.Height
+	if versionedHash != nil {
+		committedVersion = versionedHash.Version
+	}
 	if !version.AreSame(committedVersion, rwsetutil.NewVersion(kvReadHash.Version)) {
 		logger.Debugf("Version mismatch for key hash [%s:%s:%#v]. Committed version = [%s], Version in hashedReadSet [%s]",
 			ns, coll, kvReadHash.KeyHash, committedVersion, kvReadHash.Version)
