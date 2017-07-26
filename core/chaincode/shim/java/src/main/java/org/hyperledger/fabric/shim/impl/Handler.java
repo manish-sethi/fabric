@@ -1,6 +1,8 @@
 /*
 Copyright DTCC, IBM 2016, 2017 All Rights Reserved.
 
+SPDX-License-Identifier: Apache-2.0
+
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
@@ -50,9 +52,11 @@ import org.hyperledger.fabric.protos.peer.Chaincode.ChaincodeSpec;
 import org.hyperledger.fabric.protos.peer.ChaincodeEventPackage.ChaincodeEvent;
 import org.hyperledger.fabric.protos.peer.ChaincodeShim.ChaincodeMessage;
 import org.hyperledger.fabric.protos.peer.ChaincodeShim.ChaincodeMessage.Type;
+import org.hyperledger.fabric.protos.peer.ChaincodeShim.DelState;
 import org.hyperledger.fabric.protos.peer.ChaincodeShim.GetQueryResult;
 import org.hyperledger.fabric.protos.peer.ChaincodeShim.GetStateByRange;
-import org.hyperledger.fabric.protos.peer.ChaincodeShim.PutStateInfo;
+import org.hyperledger.fabric.protos.peer.ChaincodeShim.GetState;
+import org.hyperledger.fabric.protos.peer.ChaincodeShim.PutState;
 import org.hyperledger.fabric.protos.peer.ChaincodeShim.QueryResponse;
 import org.hyperledger.fabric.protos.peer.ChaincodeShim.QueryStateClose;
 import org.hyperledger.fabric.protos.peer.ChaincodeShim.QueryStateNext;
@@ -519,18 +523,22 @@ public class Handler {
 	}
 
 	private static ChaincodeMessage newGetStateEventMessage(final String txId, final String key) {
-		return newEventMessage(GET_STATE, txId, ByteString.copyFromUtf8(key));
+		return newEventMessage(GET_STATE, txId, GetState.newBuilder()
+                .setKey(key)
+                .build().toByteString());
 	}
 
 	private static ChaincodeMessage newPutStateEventMessage(final String txId, final String key, final ByteString value) {
-		return newEventMessage(PUT_STATE, txId, PutStateInfo.newBuilder()
+		return newEventMessage(PUT_STATE, txId, PutState.newBuilder()
 				.setKey(key)
 				.setValue(value)
 				.build().toByteString());
 	}
 
 	private static ChaincodeMessage newDeleteStateEventMessage(final String txId, final String key) {
-		return newEventMessage(DEL_STATE, txId, ByteString.copyFromUtf8(key));
+		return newEventMessage(DEL_STATE, txId, DelState.newBuilder()
+                .setKey(key)
+                .build().toByteString());
 	}
 
 	private static ChaincodeMessage newErrorEventMessage(final String txId, final Throwable throwable) {
