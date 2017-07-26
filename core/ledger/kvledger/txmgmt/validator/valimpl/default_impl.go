@@ -89,7 +89,7 @@ func (impl *DefaultImpl) validatePvtWriteSet(block *valinternal.Block) (*privacy
 		if tx.ValidationCode != peer.TxValidationCode_VALID {
 			continue
 		}
-		if !tx.InvolvesPvtData() {
+		if !tx.ContainsPvtWrites() {
 			continue
 		}
 		var pvtSimRes *ledger.EndorserPrivateSimulationResults
