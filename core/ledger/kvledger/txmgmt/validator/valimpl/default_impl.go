@@ -53,6 +53,7 @@ func NewStatebasedValidator(db privacyenabledstate.DB, tStore pvtrwstorage.Trans
 
 // ValidateAndPrepareBatch implements the function in interface validator.Validator
 func (impl *DefaultImpl) ValidateAndPrepareBatch(block *common.Block, doMVCCValidation bool) (*privacyenabledstate.UpdateBatch, error) {
+	logger.Debugf("ValidateAndPrepareBatch() for block number = [%d]", block.Header.Number)
 	var internalBlock *valinternal.Block
 	var pubAndHashUpdates *valinternal.PubAndHashUpdates
 	var pvtUpdates *privacyenabledstate.PvtUpdateBatch
@@ -61,13 +62,17 @@ func (impl *DefaultImpl) ValidateAndPrepareBatch(block *common.Block, doMVCCVali
 	if internalBlock, err = preprocessProtoBlock(block); err != nil {
 		return nil, err
 	}
+	logger.Debugf("preprocessing ProtoBlock...")
 	if pubAndHashUpdates, err = impl.InternalValidator.ValidateAndPrepareBatch(internalBlock, doMVCCValidation); err != nil {
 		return nil, err
 	}
+	logger.Debugf("validated rwset...")
 	if pvtUpdates, err = impl.validatePvtWriteSet(internalBlock); err != nil {
 		return nil, err
 	}
+	logger.Debugf("validated pvtrwset...")
 	postprocessProtoBlock(block, internalBlock)
+	logger.Debugf("postprocessing ProtoBlock...")
 	return &privacyenabledstate.UpdateBatch{
 		PubUpdates:  pubAndHashUpdates.PubUpdates,
 		HashUpdates: pubAndHashUpdates.HashUpdates,

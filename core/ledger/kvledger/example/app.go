@@ -127,7 +127,7 @@ func constructTransaction(simulationResults []byte) *common.Envelope {
 		Version: "v1",
 	}
 	response := &pb.Response{Status: 200}
-	txEnv, _, _ := ptestutils.ConstructSingedTxEnvWithDefaultSigner(util.GetTestChainID(), ccid, response, simulationResults, nil, nil)
+	txEnv, _, _ := ptestutils.ConstructSingedTxEnvWithDefaultSigner(util.GetTestChainID(), ccid, response, simulationResults, "", nil, nil)
 	return txEnv
 }
 
