@@ -60,11 +60,13 @@ func NewPubAndHashUpdates() *PubAndHashUpdates {
 	}
 }
 
-// InvolvesPvtData returns true if this transaction is not limited to affecting the public data only
-func (t *Transaction) InvolvesPvtData() bool {
+// ContainsPvtWrites returns true if this transaction is not limited to affecting the public data only
+func (t *Transaction) ContainsPvtWrites() bool {
 	for _, ns := range t.RWSet.NsRwSets {
-		if len(ns.CollHashedRwSets) > 0 {
-			return true
+		for _, coll := range ns.CollHashedRwSets {
+			if coll.PvtRwSetHash != nil {
+				return true
+			}
 		}
 	}
 	return false
