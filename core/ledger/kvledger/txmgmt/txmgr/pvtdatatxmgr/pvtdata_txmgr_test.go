@@ -122,7 +122,7 @@ func testTxsWithPvtData(t *testing.T, testEnv *TestEnv) {
 			[]*TestTx{&TestTx{ID: txid1, PubSimBytes: pubSimBytes1}},
 			[]int{},
 		)
-		checkCommittedValue(t, testEnv, "ns", "coll1", "key1", []byte(txid1+"pvt-value1"), version.NewHeight(1, 0))
+		checkPvtCommittedValue(t, testEnv, "ns", "coll1", "key1", []byte(txid1+"pvt-value1"), version.NewHeight(1, 0))
 
 		// simulate two txs - tx2 and tx3
 		txid2 := "txid2"
@@ -150,8 +150,36 @@ func testTxsWithPvtData(t *testing.T, testEnv *TestEnv) {
 			},
 			[]int{1},
 		)
-		checkCommittedValue(t, testEnv, "ns", "coll1", "key2", []byte(txid1+"pvt-value2"), version.NewHeight(1, 0))
-		checkCommittedValue(t, testEnv, "ns", "coll1", "key1", []byte(txid2+"pvt-value1"), version.NewHeight(2, 0))
+		checkPvtCommittedValue(t, testEnv, "ns", "coll1", "key2", []byte(txid1+"pvt-value2"), version.NewHeight(1, 0))
+		checkPvtCommittedValue(t, testEnv, "ns", "coll1", "key1", []byte(txid2+"pvt-value1"), version.NewHeight(2, 0))
+	})
+}
+
+func TestTxsWithPvtDataReadOnly(t *testing.T) {
+	for _, testEnv := range TestEnvs {
+		testTxsWithPvtDataReadOnly(t, testEnv)
+	}
+}
+
+func testTxsWithPvtDataReadOnly(t *testing.T, testEnv *TestEnv) {
+	t.Run(testEnv.Name, func(t *testing.T) {
+		testEnv.Init(t, "testledger")
+		defer testEnv.Cleanup()
+		bg, _ := testutil.NewBlockGenerator(t, testEnv.LedgerID, false)
+
+		// simulate first tx and commit it
+		txid1 := "txid1"
+		sim1, _ := testEnv.Txmgr.NewTxSimulator(txid1)
+		sim1.GetPrivateData("ns", "coll1", "key2")
+		sim1.SetState("ns", "key1", []byte(txid1+"value1"))
+		sim1.Done()
+		res1, _ := sim1.GetTxSimulationResults()
+		pubSimBytes1, _ := res1.GetPubSimulationBytes()
+		checkValidateAndCommit(t, bg, testEnv.Txmgr,
+			[]*TestTx{&TestTx{ID: txid1, PubSimBytes: pubSimBytes1}},
+			[]int{},
+		)
+		checkPubCommittedValue(t, testEnv, "ns", "key1", []byte(txid1+"value1"), version.NewHeight(1, 0))
 	})
 }
 
@@ -224,8 +252,14 @@ func checkValidateAndCommit(t *testing.T, bg *testutil.BlockGenerator, txmgr txm
 	}
 }
 
-func checkCommittedValue(t *testing.T, testEnv *TestEnv, ns, coll, key string, expectedVal []byte, expectedVer *version.Height) {
+func checkPvtCommittedValue(t *testing.T, testEnv *TestEnv, ns, coll, key string, expectedVal []byte, expectedVer *version.Height) {
 	vv, _ := testEnv.DB.GetPrivateData(ns, coll, key)
+	testutil.AssertEquals(t, vv.Value, expectedVal)
+	testutil.AssertEquals(t, vv.Version, expectedVer)
+}
+
+func checkPubCommittedValue(t *testing.T, testEnv *TestEnv, ns, key string, expectedVal []byte, expectedVer *version.Height) {
+	vv, _ := testEnv.DB.GetState(ns, key)
 	testutil.AssertEquals(t, vv.Value, expectedVal)
 	testutil.AssertEquals(t, vv.Version, expectedVer)
 }
