@@ -25,7 +25,6 @@ import (
 	"github.com/hyperledger/fabric/common/ledger/testutil"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/privacyenabledstate"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/rwsetutil"
-	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/statedb"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/validator/valinternal"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/version"
 	"github.com/hyperledger/fabric/protos/ledger/rwset/kvrwset"
@@ -46,13 +45,13 @@ func TestValidator(t *testing.T) {
 	db := testDBEnv.GetDBHandle("TestDB")
 
 	//populate db with initial data
-	batch := statedb.NewUpdateBatch()
-	batch.Put("ns1", "key1", []byte("value1"), version.NewHeight(1, 0))
-	batch.Put("ns1", "key2", []byte("value2"), version.NewHeight(1, 1))
-	batch.Put("ns1", "key3", []byte("value3"), version.NewHeight(1, 2))
-	batch.Put("ns1", "key4", []byte("value4"), version.NewHeight(1, 3))
-	batch.Put("ns1", "key5", []byte("value5"), version.NewHeight(1, 4))
-	db.ApplyUpdates(batch, version.NewHeight(1, 4))
+	batch := privacyenabledstate.NewUpdateBatch()
+	batch.PubUpdates.Put("ns1", "key1", []byte("value1"), version.NewHeight(1, 0))
+	batch.PubUpdates.Put("ns1", "key2", []byte("value2"), version.NewHeight(1, 1))
+	batch.PubUpdates.Put("ns1", "key3", []byte("value3"), version.NewHeight(1, 2))
+	batch.PubUpdates.Put("ns1", "key4", []byte("value4"), version.NewHeight(1, 3))
+	batch.PubUpdates.Put("ns1", "key5", []byte("value5"), version.NewHeight(1, 4))
+	db.ApplyPrivacyAwareUpdates(batch, version.NewHeight(1, 4))
 
 	validator := NewValidator(db)
 
@@ -89,13 +88,13 @@ func TestPhantomValidation(t *testing.T) {
 	db := testDBEnv.GetDBHandle("TestDB")
 
 	//populate db with initial data
-	batch := statedb.NewUpdateBatch()
-	batch.Put("ns1", "key1", []byte("value1"), version.NewHeight(1, 0))
-	batch.Put("ns1", "key2", []byte("value2"), version.NewHeight(1, 1))
-	batch.Put("ns1", "key3", []byte("value3"), version.NewHeight(1, 2))
-	batch.Put("ns1", "key4", []byte("value4"), version.NewHeight(1, 3))
-	batch.Put("ns1", "key5", []byte("value5"), version.NewHeight(1, 4))
-	db.ApplyUpdates(batch, version.NewHeight(1, 4))
+	batch := privacyenabledstate.NewUpdateBatch()
+	batch.PubUpdates.Put("ns1", "key1", []byte("value1"), version.NewHeight(1, 0))
+	batch.PubUpdates.Put("ns1", "key2", []byte("value2"), version.NewHeight(1, 1))
+	batch.PubUpdates.Put("ns1", "key3", []byte("value3"), version.NewHeight(1, 2))
+	batch.PubUpdates.Put("ns1", "key4", []byte("value4"), version.NewHeight(1, 3))
+	batch.PubUpdates.Put("ns1", "key5", []byte("value5"), version.NewHeight(1, 4))
+	db.ApplyPrivacyAwareUpdates(batch, version.NewHeight(1, 4))
 
 	validator := NewValidator(db)
 
@@ -160,17 +159,17 @@ func TestPhantomHashBasedValidation(t *testing.T) {
 	db := testDBEnv.GetDBHandle("TestDB")
 
 	//populate db with initial data
-	batch := statedb.NewUpdateBatch()
-	batch.Put("ns1", "key1", []byte("value1"), version.NewHeight(1, 0))
-	batch.Put("ns1", "key2", []byte("value2"), version.NewHeight(1, 1))
-	batch.Put("ns1", "key3", []byte("value3"), version.NewHeight(1, 2))
-	batch.Put("ns1", "key4", []byte("value4"), version.NewHeight(1, 3))
-	batch.Put("ns1", "key5", []byte("value5"), version.NewHeight(1, 4))
-	batch.Put("ns1", "key6", []byte("value6"), version.NewHeight(1, 5))
-	batch.Put("ns1", "key7", []byte("value7"), version.NewHeight(1, 6))
-	batch.Put("ns1", "key8", []byte("value8"), version.NewHeight(1, 7))
-	batch.Put("ns1", "key9", []byte("value9"), version.NewHeight(1, 8))
-	db.ApplyUpdates(batch, version.NewHeight(1, 8))
+	batch := privacyenabledstate.NewUpdateBatch()
+	batch.PubUpdates.Put("ns1", "key1", []byte("value1"), version.NewHeight(1, 0))
+	batch.PubUpdates.Put("ns1", "key2", []byte("value2"), version.NewHeight(1, 1))
+	batch.PubUpdates.Put("ns1", "key3", []byte("value3"), version.NewHeight(1, 2))
+	batch.PubUpdates.Put("ns1", "key4", []byte("value4"), version.NewHeight(1, 3))
+	batch.PubUpdates.Put("ns1", "key5", []byte("value5"), version.NewHeight(1, 4))
+	batch.PubUpdates.Put("ns1", "key6", []byte("value6"), version.NewHeight(1, 5))
+	batch.PubUpdates.Put("ns1", "key7", []byte("value7"), version.NewHeight(1, 6))
+	batch.PubUpdates.Put("ns1", "key8", []byte("value8"), version.NewHeight(1, 7))
+	batch.PubUpdates.Put("ns1", "key9", []byte("value9"), version.NewHeight(1, 8))
+	db.ApplyPrivacyAwareUpdates(batch, version.NewHeight(1, 8))
 
 	validator := NewValidator(db)
 

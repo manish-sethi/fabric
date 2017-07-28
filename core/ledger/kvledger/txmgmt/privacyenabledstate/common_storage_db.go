@@ -18,6 +18,7 @@ package privacyenabledstate
 
 import (
 	"encoding/base64"
+	"fmt"
 
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/statedb"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/statedb/statecouchdb"
@@ -106,17 +107,17 @@ func (s CommonStorageDB) ExecuteQueryOnPrivateData(namespace, collection, query 
 	return s.ExecuteQuery(derivePvtDataNs(namespace, collection), query)
 }
 
-// ApplyUpdates overrides the funciton in statedb.VersionedDB and throws appropriate message
-// TODO uncomment the following when integration of new code is done
-// func (s *CommonStorageDB) ApplyUpdates(batch *statedb.Batch, height *version.Height) error {
-// 	return fmt.Errorf("This function should not be invoked. Please invoke function 'ApplyPubPvtAndHashUpdates'")
-// }
+// ApplyUpdates overrides the funciton in statedb.VersionedDB and throws appropriate error message
+// Otherwise, somewhere in the code, usage of this function could lead to updating only public data.
+func (s *CommonStorageDB) ApplyUpdates(batch *statedb.UpdateBatch, height *version.Height) error {
+	return fmt.Errorf("This function should not be invoked on this type. Please invoke function 'ApplyPrivacyAwareUpdates'")
+}
 
 // ApplyPrivacyAwareUpdates implements corresponding function in interface PrivacyAwareVersionedDB
 func (s *CommonStorageDB) ApplyPrivacyAwareUpdates(updates *UpdateBatch, height *version.Height) error {
 	addPvtUpdates(updates.PubUpdates, updates.PvtUpdates)
 	addHashedUpdates(updates.PubUpdates, updates.HashUpdates, !s.BytesKeySuppoted())
-	return s.ApplyUpdates(updates.PubUpdates.UpdateBatch, height)
+	return s.VersionedDB.ApplyUpdates(updates.PubUpdates.UpdateBatch, height)
 }
 
 func derivePvtDataNs(namespace, collection string) string {
