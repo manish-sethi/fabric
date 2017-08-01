@@ -25,7 +25,7 @@ import (
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/validator"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/validator/valimpl"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/version"
-	"github.com/hyperledger/fabric/core/ledger/pvtrwstorage"
+	"github.com/hyperledger/fabric/core/transientdata"
 	"github.com/hyperledger/fabric/protos/common"
 )
 
@@ -42,7 +42,7 @@ type LockBasedTxMgr struct {
 }
 
 // NewLockBasedTxMgr constructs a new instance of NewLockBasedTxMgr
-func NewLockBasedTxMgr(db privacyenabledstate.DB, tStore pvtrwstorage.TransientStore) *LockBasedTxMgr {
+func NewLockBasedTxMgr(db privacyenabledstate.DB, tStore transientdata.Store) *LockBasedTxMgr {
 	db.Open()
 	return &LockBasedTxMgr{db: db, validator: valimpl.NewStatebasedValidator(db, tStore)}
 }

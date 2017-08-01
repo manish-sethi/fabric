@@ -20,15 +20,14 @@ import (
 	"fmt"
 
 	"github.com/hyperledger/fabric/common/flogging"
-	"github.com/hyperledger/fabric/core/ledger"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/privacyenabledstate"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/rwsetutil"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/validator"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/validator/statebasedval"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/validator/valinternal"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/version"
-	"github.com/hyperledger/fabric/core/ledger/pvtrwstorage"
 	"github.com/hyperledger/fabric/core/ledger/util"
+	"github.com/hyperledger/fabric/core/transientdata"
 	"github.com/hyperledger/fabric/protos/common"
 	"github.com/hyperledger/fabric/protos/peer"
 	"github.com/hyperledger/fabric/protos/utils"
@@ -42,12 +41,12 @@ var logger = flogging.MustGetLogger("valimpl")
 // valinternal.InternalValidator) such as statebased validator
 type DefaultImpl struct {
 	valinternal.InternalValidator
-	tStore pvtrwstorage.TransientStore
+	tStore transientdata.Store
 }
 
 // NewStatebasedValidator constructs a validator that internally manages statebased validator and in addition
 // handles the tasks that are agnostic to a particular validation scheme such as parsing the block and handling the pvt data
-func NewStatebasedValidator(db privacyenabledstate.DB, tStore pvtrwstorage.TransientStore) validator.Validator {
+func NewStatebasedValidator(db privacyenabledstate.DB, tStore transientdata.Store) validator.Validator {
 	return &DefaultImpl{statebasedval.NewValidator(db), tStore}
 }
 
@@ -92,7 +91,7 @@ func (impl *DefaultImpl) validatePvtWriteSet(block *valinternal.Block) (*privacy
 		if !tx.ContainsPvtWrites() {
 			continue
 		}
-		var pvtSimRes *ledger.EndorserPrivateSimulationResults
+		var pvtSimRes *transientdata.EndorserPrivateSimulationResults
 		var err error
 		if selfEndorsed(tx) {
 			if pvtSimRes, err = impl.tStore.GetSelfSimulatedTxPvtRWSet(tx.ID); err != nil {

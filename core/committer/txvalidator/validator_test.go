@@ -425,7 +425,7 @@ func (m *mockLedger) GetTxValidationCodeByTxID(txID string) (peer.TxValidationCo
 }
 
 // NewTxSimulator creates new transaction simulator
-func (m *mockLedger) NewTxSimulator() (ledger.TxSimulator, error) {
+func (m *mockLedger) NewTxSimulator(txid string) (ledger.TxSimulator, error) {
 	args := m.Called()
 	return args.Get(0).(ledger.TxSimulator), nil
 }
@@ -440,6 +440,33 @@ func (m *mockLedger) NewQueryExecutor() (ledger.QueryExecutor, error) {
 func (m *mockLedger) NewHistoryQueryExecutor() (ledger.HistoryQueryExecutor, error) {
 	args := m.Called()
 	return args.Get(0).(ledger.HistoryQueryExecutor), nil
+}
+
+// GetPvtDataAndBlockByNum retrieves pvt data and block
+func (m *mockLedger) GetPvtDataAndBlockByNum(blockNum uint64, collections []string) (*ledger.PvtDataAndBlock, error) {
+	args := m.Called()
+	return args.Get(0).(*ledger.PvtDataAndBlock), nil
+}
+
+// GetPvtDataByNum retrieves the pvt data
+func (m *mockLedger) GetPvtDataByNum(blockNum uint64, collections []string) ([]*ledger.TxPvtData, error) {
+	args := m.Called()
+	return args.Get(0).([]*ledger.TxPvtData), nil
+}
+
+// CommitWithPvtData commits the block and the corresponding pvt data in an atomic operation
+func (m *mockLedger) CommitWithPvtData(PvtDataAndBlock *ledger.PvtDataAndBlock) error {
+	return nil
+}
+
+// PurgePrivateData purges the private data
+func (m *mockLedger) PurgePrivateData(maxBlockNumToRetain uint64) error {
+	return nil
+}
+
+// PrivateDataMinBlockNum returns the lowest retained endorsement block height
+func (m *mockLedger) PrivateDataMinBlockNum() (uint64, error) {
+	return 0, nil
 }
 
 // Prune prune using policy
@@ -498,6 +525,26 @@ func (exec *mockQueryExecutor) GetStateRangeScanIterator(namespace string, start
 
 func (exec *mockQueryExecutor) ExecuteQuery(namespace, query string) (ledger2.ResultsIterator, error) {
 	args := exec.Called(namespace)
+	return args.Get(0).(ledger2.ResultsIterator), args.Error(1)
+}
+
+func (exec *mockQueryExecutor) GetPrivateData(namespace, collection, key string) ([]byte, error) {
+	args := exec.Called(namespace, collection, key)
+	return args.Get(0).([]byte), args.Error(1)
+}
+
+func (exec *mockQueryExecutor) GetPrivateDataMultipleKeys(namespace, collection string, keys []string) ([][]byte, error) {
+	args := exec.Called(namespace, collection, keys)
+	return args.Get(0).([][]byte), args.Error(1)
+}
+
+func (exec *mockQueryExecutor) GetPrivateDataRangeScanIterator(namespace, collection, startKey, endKey string) (ledger2.ResultsIterator, error) {
+	args := exec.Called(namespace, collection, startKey, endKey)
+	return args.Get(0).(ledger2.ResultsIterator), args.Error(1)
+}
+
+func (exec *mockQueryExecutor) ExecuteQueryOnPrivateData(namespace, collection, query string) (ledger2.ResultsIterator, error) {
+	args := exec.Called(namespace, collection, query)
 	return args.Get(0).(ledger2.ResultsIterator), args.Error(1)
 }
 
