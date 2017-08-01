@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package pvtrwstorage
+package transientdata
 
 import (
 	"os"
@@ -24,30 +24,30 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// TransientStoreEnv provides the transient store env for testing
-type TransientStoreEnv struct {
-	t                          testing.TB
-	TestTransientStoreProvider TransientStoreProvider
-	TestTransientStore         TransientStore
+// StoreEnv provides the  store env for testing
+type StoreEnv struct {
+	t                 testing.TB
+	TestStoreProvider StoreProvider
+	TestStore         Store
 }
 
-// NewTestTransientStoreEnv construct a TransientStoreEnv for testing
-func NewTestTransientStoreEnv(t *testing.T) *TransientStoreEnv {
-	removeTransientStorePath(t)
+// NewTestStoreEnv construct a StoreEnv for testing
+func NewTestStoreEnv(t *testing.T) *StoreEnv {
+	removeStorePath(t)
 	assert := assert.New(t)
-	testTransientStoreProvider := NewTransientStoreProvider()
-	testTransientStore, err := testTransientStoreProvider.OpenStore("TestTransientStore")
+	testStoreProvider := NewStoreProvider()
+	testStore, err := testStoreProvider.OpenStore("TestStore")
 	assert.NoError(err)
-	return &TransientStoreEnv{t, testTransientStoreProvider, testTransientStore}
+	return &StoreEnv{t, testStoreProvider, testStore}
 }
 
-// Cleanup cleansup the transient store env after testing
-func (env *TransientStoreEnv) Cleanup() {
-	env.TestTransientStoreProvider.Close()
-	removeTransientStorePath(env.t)
+// Cleanup cleansup the  store env after testing
+func (env *StoreEnv) Cleanup() {
+	env.TestStoreProvider.Close()
+	removeStorePath(env.t)
 }
 
-func removeTransientStorePath(t testing.TB) {
+func removeStorePath(t testing.TB) {
 	dbPath := ledgerconfig.GetTransientStorePath()
 	if err := os.RemoveAll(dbPath); err != nil {
 		t.Fatalf("Err: %s", err)

@@ -30,7 +30,7 @@ import (
 	"github.com/hyperledger/fabric/core/ledger/kvledger/history/historydb/historyleveldb"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/privacyenabledstate"
 	"github.com/hyperledger/fabric/core/ledger/ledgerconfig"
-	"github.com/hyperledger/fabric/core/ledger/pvtrwstorage"
+	"github.com/hyperledger/fabric/core/transientdata"
 	"github.com/hyperledger/fabric/protos/common"
 	"github.com/hyperledger/fabric/protos/utils"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -54,7 +54,7 @@ type Provider struct {
 	blockStoreProvider     blkstorage.BlockStoreProvider
 	vdbProvider            privacyenabledstate.DBProvider
 	historydbProvider      historydb.HistoryDBProvider
-	transientStoreProvider pvtrwstorage.TransientStoreProvider
+	transientStoreProvider transientdata.StoreProvider
 }
 
 // NewProvider instantiates a new Provider.
@@ -86,7 +86,7 @@ func NewProvider() (ledger.PeerLedgerProvider, error) {
 		return nil, err
 	}
 	// Initialize the transient store (temporary storage of private rwset
-	transientStoreProvider := pvtrwstorage.NewTransientStoreProvider()
+	transientStoreProvider := transientdata.NewStoreProvider()
 
 	// Initialize the history database (index for history of values by key)
 	var historydbProvider historydb.HistoryDBProvider

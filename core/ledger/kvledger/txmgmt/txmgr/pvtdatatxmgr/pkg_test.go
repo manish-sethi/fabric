@@ -22,7 +22,7 @@ import (
 	"github.com/hyperledger/fabric/common/ledger/testutil"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/privacyenabledstate"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/txmgr"
-	"github.com/hyperledger/fabric/core/ledger/pvtrwstorage"
+	"github.com/hyperledger/fabric/core/transientdata"
 )
 
 var (
@@ -39,10 +39,10 @@ type TestEnv struct {
 	Name      string
 	LedgerID  string
 	DBEnv     privacyenabledstate.TestEnv
-	TStoreEnv *pvtrwstorage.TransientStoreEnv
+	TStoreEnv *transientdata.StoreEnv
 
 	DB     privacyenabledstate.DB
-	TStore pvtrwstorage.TransientStore
+	TStore transientdata.Store
 	Txmgr  txmgr.TxMgr
 }
 
@@ -55,9 +55,9 @@ func (env *TestEnv) Init(t *testing.T, testLedgerID string) {
 	env.t = t
 	env.DBEnv.Init(t)
 	env.DB = env.DBEnv.GetDBHandle(testLedgerID)
-	env.TStoreEnv = pvtrwstorage.NewTestTransientStoreEnv(t)
+	env.TStoreEnv = transientdata.NewTestStoreEnv(t)
 	var err error
-	env.TStore, err = env.TStoreEnv.TestTransientStoreProvider.OpenStore(testLedgerID)
+	env.TStore, err = env.TStoreEnv.TestStoreProvider.OpenStore(testLedgerID)
 	testutil.AssertNoError(t, err, "")
 	env.Txmgr = NewLockbasedTxMgr(env.DB, env.TStore)
 }

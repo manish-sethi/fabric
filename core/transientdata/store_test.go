@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package pvtrwstorage
+package transientdata
 
 import (
 	"fmt"
@@ -22,13 +22,12 @@ import (
 	"testing"
 
 	commonledger "github.com/hyperledger/fabric/common/ledger"
-	"github.com/hyperledger/fabric/core/ledger"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestMain(m *testing.M) {
-	viper.Set("peer.fileSystemPath", "/tmp/fabric/ledgertests/kvledger/")
+	viper.Set("peer.fileSystemPath", "/tmp/fabric/core/transientdata")
 	os.Exit(m.Run())
 }
 
@@ -76,15 +75,15 @@ func TestRWSetKeyCodingEncoding(t *testing.T) {
 }
 
 func TestTransientStorePersistAndRetrieve(t *testing.T) {
-	env := NewTestTransientStoreEnv(t)
+	env := NewTestStoreEnv(t)
 	assert := assert.New(t)
 	txid := "txid-1"
 
 	// Create private simulation results for txid-1
-	var endorsersResults []*ledger.EndorserPrivateSimulationResults
+	var endorsersResults []*EndorserPrivateSimulationResults
 
 	// Results produced by endorser 1
-	endorser0SimulationResults := &ledger.EndorserPrivateSimulationResults{
+	endorser0SimulationResults := &EndorserPrivateSimulationResults{
 		EndorserID:               "endorser0",
 		EndorsementBlockHeight:   10,
 		PrivateSimulationResults: []byte("results"),
@@ -92,51 +91,51 @@ func TestTransientStorePersistAndRetrieve(t *testing.T) {
 	endorsersResults = append(endorsersResults, endorser0SimulationResults)
 
 	// Results produced by endorser 2
-	endorser1SimulationResults := &ledger.EndorserPrivateSimulationResults{
+	endorser1SimulationResults := &EndorserPrivateSimulationResults{
 		EndorserID:               "endorser1",
 		EndorsementBlockHeight:   10,
 		PrivateSimulationResults: []byte("results"),
 	}
 	endorsersResults = append(endorsersResults, endorser1SimulationResults)
 
-	// Persist simulation results into transient store
+	// Persist simulation results into  store
 	var err error
 	for i := 0; i < len(endorsersResults); i++ {
-		err = env.TestTransientStore.Persist(txid, endorsersResults[i].EndorserID,
+		err = env.TestStore.Persist(txid, endorsersResults[i].EndorserID,
 			endorsersResults[i].EndorsementBlockHeight, endorsersResults[i].PrivateSimulationResults)
 		assert.NoError(err)
 	}
 
-	// Retrieve simulation results of txid-1 from transient store
+	// Retrieve simulation results of txid-1 from  store
 	var iter commonledger.ResultsIterator
-	iter, err = env.TestTransientStore.GetTxPrivateRWSetByTxid(txid)
+	iter, err = env.TestStore.GetTxPrivateRWSetByTxid(txid)
 	assert.NoError(err)
 
 	var result commonledger.QueryResult
-	var actualEndorsersResults []*ledger.EndorserPrivateSimulationResults
+	var actualEndorsersResults []*EndorserPrivateSimulationResults
 	for true {
 		result, err = iter.Next()
 		assert.NoError(err)
 		if result == nil {
 			break
 		}
-		actualEndorsersResults = append(actualEndorsersResults, result.(*ledger.EndorserPrivateSimulationResults))
+		actualEndorsersResults = append(actualEndorsersResults, result.(*EndorserPrivateSimulationResults))
 	}
 	iter.Close()
 	assert.Equal(endorsersResults, actualEndorsersResults)
 }
 
-func TestTransientStorePurge(t *testing.T) {
-	env := NewTestTransientStoreEnv(t)
+func TestStorePurge(t *testing.T) {
+	env := NewTestStoreEnv(t)
 	assert := assert.New(t)
 
 	txid := "txid-1"
 
 	// Create private simulation results for txid-1
-	var endorsersResults []*ledger.EndorserPrivateSimulationResults
+	var endorsersResults []*EndorserPrivateSimulationResults
 
 	// Results produced by endorser 1
-	endorser0SimulationResults := &ledger.EndorserPrivateSimulationResults{
+	endorser0SimulationResults := &EndorserPrivateSimulationResults{
 		EndorserID:               "endorser0",
 		EndorsementBlockHeight:   10,
 		PrivateSimulationResults: []byte("results"),
@@ -144,7 +143,7 @@ func TestTransientStorePurge(t *testing.T) {
 	endorsersResults = append(endorsersResults, endorser0SimulationResults)
 
 	// Results produced by endorser 2
-	endorser1SimulationResults := &ledger.EndorserPrivateSimulationResults{
+	endorser1SimulationResults := &EndorserPrivateSimulationResults{
 		EndorserID:               "endorser1",
 		EndorsementBlockHeight:   11,
 		PrivateSimulationResults: []byte("results"),
@@ -152,7 +151,7 @@ func TestTransientStorePurge(t *testing.T) {
 	endorsersResults = append(endorsersResults, endorser1SimulationResults)
 
 	// Results produced by endorser 3
-	endorser2SimulationResults := &ledger.EndorserPrivateSimulationResults{
+	endorser2SimulationResults := &EndorserPrivateSimulationResults{
 		EndorserID:               "endorser2",
 		EndorsementBlockHeight:   12,
 		PrivateSimulationResults: []byte("results"),
@@ -160,7 +159,7 @@ func TestTransientStorePurge(t *testing.T) {
 	endorsersResults = append(endorsersResults, endorser2SimulationResults)
 
 	// Results produced by endorser 3
-	endorser3SimulationResults := &ledger.EndorserPrivateSimulationResults{
+	endorser3SimulationResults := &EndorserPrivateSimulationResults{
 		EndorserID:               "endorser3",
 		EndorsementBlockHeight:   12,
 		PrivateSimulationResults: []byte("results"),
@@ -168,69 +167,69 @@ func TestTransientStorePurge(t *testing.T) {
 	endorsersResults = append(endorsersResults, endorser3SimulationResults)
 
 	// Results produced by endorser 3
-	endorser4SimulationResults := &ledger.EndorserPrivateSimulationResults{
+	endorser4SimulationResults := &EndorserPrivateSimulationResults{
 		EndorserID:               "endorser4",
 		EndorsementBlockHeight:   13,
 		PrivateSimulationResults: []byte("results"),
 	}
 	endorsersResults = append(endorsersResults, endorser4SimulationResults)
 
-	// Persist simulation results into transient store
+	// Persist simulation results into  store
 	var err error
 	for i := 0; i < 5; i++ {
-		err = env.TestTransientStore.Persist(txid, endorsersResults[i].EndorserID,
+		err = env.TestStore.Persist(txid, endorsersResults[i].EndorserID,
 			endorsersResults[i].EndorsementBlockHeight, endorsersResults[i].PrivateSimulationResults)
 		assert.NoError(err)
 	}
 
 	// Retain results generate at block height greater than or equal to 12
 	minEndorsementBlkHtToRetain := uint64(12)
-	err = env.TestTransientStore.Purge(minEndorsementBlkHtToRetain)
+	err = env.TestStore.Purge(minEndorsementBlkHtToRetain)
 	assert.NoError(err)
 
-	// Retrieve simulation results of txid-1 from transient store
+	// Retrieve simulation results of txid-1 from  store
 	var iter commonledger.ResultsIterator
-	iter, err = env.TestTransientStore.GetTxPrivateRWSetByTxid(txid)
+	iter, err = env.TestStore.GetTxPrivateRWSetByTxid(txid)
 	assert.NoError(err)
 
 	// Expected results for txid-1
-	var expectedEndorsersResults []*ledger.EndorserPrivateSimulationResults
+	var expectedEndorsersResults []*EndorserPrivateSimulationResults
 	expectedEndorsersResults = append(expectedEndorsersResults, endorser2SimulationResults) //endorsed at height 12
 	expectedEndorsersResults = append(expectedEndorsersResults, endorser3SimulationResults) //endorsed at height 12
 	expectedEndorsersResults = append(expectedEndorsersResults, endorser4SimulationResults) //endorsed at height 13
 
 	// Check whether actual results and expected results are same
 	var result commonledger.QueryResult
-	var actualEndorsersResults []*ledger.EndorserPrivateSimulationResults
+	var actualEndorsersResults []*EndorserPrivateSimulationResults
 	for true {
 		result, err = iter.Next()
 		assert.NoError(err)
 		if result == nil {
 			break
 		}
-		actualEndorsersResults = append(actualEndorsersResults, result.(*ledger.EndorserPrivateSimulationResults))
+		actualEndorsersResults = append(actualEndorsersResults, result.(*EndorserPrivateSimulationResults))
 	}
 	iter.Close()
 	assert.Equal(expectedEndorsersResults, actualEndorsersResults)
 
 	// Get the minimum retained endorsement block height
 	var actualMinEndorsementBlkHt uint64
-	actualMinEndorsementBlkHt, err = env.TestTransientStore.GetMinEndorsementBlkHt()
+	actualMinEndorsementBlkHt, err = env.TestStore.GetMinEndorsementBlkHt()
 	assert.NoError(err)
 	assert.Equal(minEndorsementBlkHtToRetain, actualMinEndorsementBlkHt)
 
 	// Retain results generate at block height greater than or equal to 15
 	minEndorsementBlkHtToRetain = uint64(15)
-	err = env.TestTransientStore.Purge(minEndorsementBlkHtToRetain)
+	err = env.TestStore.Purge(minEndorsementBlkHtToRetain)
 	assert.NoError(err)
 
-	// There should be no entries in the transient store
-	actualMinEndorsementBlkHt, err = env.TestTransientStore.GetMinEndorsementBlkHt()
-	assert.Equal(err, ErrTransientStoreEmpty)
+	// There should be no entries in the  store
+	actualMinEndorsementBlkHt, err = env.TestStore.GetMinEndorsementBlkHt()
+	assert.Equal(err, ErrStoreEmpty)
 
 	// Retain results generate at block height greater than or equal to 15
 	minEndorsementBlkHtToRetain = uint64(15)
-	err = env.TestTransientStore.Purge(minEndorsementBlkHtToRetain)
+	err = env.TestStore.Purge(minEndorsementBlkHtToRetain)
 	// Should not return any error
 	assert.NoError(err)
 

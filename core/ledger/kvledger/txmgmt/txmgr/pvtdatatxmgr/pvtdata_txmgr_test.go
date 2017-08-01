@@ -22,11 +22,10 @@ import (
 
 	"github.com/hyperledger/fabric/common/flogging"
 	"github.com/hyperledger/fabric/common/ledger/testutil"
-	"github.com/hyperledger/fabric/core/ledger"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/txmgr"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/version"
-	"github.com/hyperledger/fabric/core/ledger/pvtrwstorage"
 	"github.com/hyperledger/fabric/core/ledger/util"
+	"github.com/hyperledger/fabric/core/transientdata"
 	"github.com/hyperledger/fabric/protos/common"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
@@ -210,17 +209,17 @@ func testPvtDataWrongTxid(t *testing.T, testEnv *TestEnv) {
 	})
 }
 
-func retrieveTestEntriesFromTStore(t *testing.T, tStore pvtrwstorage.TransientStore, txid string) []*ledger.EndorserPrivateSimulationResults {
+func retrieveTestEntriesFromTStore(t *testing.T, tStore transientdata.Store, txid string) []*transientdata.EndorserPrivateSimulationResults {
 	itr, err := tStore.GetTxPrivateRWSetByTxid(txid)
 	assert.NoError(t, err)
-	var results []*ledger.EndorserPrivateSimulationResults
+	var results []*transientdata.EndorserPrivateSimulationResults
 	for {
 		result, err := itr.Next()
 		assert.NoError(t, err)
 		if result == nil {
 			break
 		}
-		results = append(results, result.(*ledger.EndorserPrivateSimulationResults))
+		results = append(results, result.(*transientdata.EndorserPrivateSimulationResults))
 	}
 	return results
 }

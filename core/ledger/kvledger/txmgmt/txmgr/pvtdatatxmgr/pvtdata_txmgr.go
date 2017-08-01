@@ -23,7 +23,7 @@ import (
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/txmgr"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/txmgr/lockbasedtxmgr"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/version"
-	"github.com/hyperledger/fabric/core/ledger/pvtrwstorage"
+	"github.com/hyperledger/fabric/core/transientdata"
 )
 
 var logger = flogging.MustGetLogger("pvtdatatxmgr")
@@ -32,11 +32,11 @@ var logger = flogging.MustGetLogger("pvtdatatxmgr")
 // and adds the additional functionality of persisting the private writesets into transient store
 type TransisentHandlerTxMgr struct {
 	txmgr.TxMgr
-	tStore pvtrwstorage.TransientStore
+	tStore transientdata.Store
 }
 
 // NewLockbasedTxMgr constructs a new instance of TransisentHandlerTxMgr
-func NewLockbasedTxMgr(db privacyenabledstate.DB, tStore pvtrwstorage.TransientStore) *TransisentHandlerTxMgr {
+func NewLockbasedTxMgr(db privacyenabledstate.DB, tStore transientdata.Store) *TransisentHandlerTxMgr {
 	return &TransisentHandlerTxMgr{lockbasedtxmgr.NewLockBasedTxMgr(db, tStore), tStore}
 }
 
@@ -65,12 +65,12 @@ func (w *TransisentHandlerTxMgr) NewTxSimulator(txid string) (ledger.TxSimulator
 // the private writesets into transient store
 type transisentHandlerTxSimulator struct {
 	ledger.TxSimulator
-	tStore   pvtrwstorage.TransientStore
+	tStore   transientdata.Store
 	txid     string
 	simBlkHt uint64
 }
 
-func newSimulatorWrapper(actualSim ledger.TxSimulator, tStore pvtrwstorage.TransientStore, txid string, simBlkHt uint64) *transisentHandlerTxSimulator {
+func newSimulatorWrapper(actualSim ledger.TxSimulator, tStore transientdata.Store, txid string, simBlkHt uint64) *transisentHandlerTxSimulator {
 	return &transisentHandlerTxSimulator{actualSim, tStore, txid, simBlkHt}
 }
 
