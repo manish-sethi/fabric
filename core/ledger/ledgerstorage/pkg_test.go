@@ -14,16 +14,26 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package pvtrwstorage
+package ledgerstorage
 
-// StoreProvider provides handle to specific 'Store' that in turn manages
-// private read-write sets for a namespace
-type StoreProvider interface {
-	OpenStore(namespace string) (Store, error)
-	Close()
+import (
+	"os"
+	"testing"
+
+	"github.com/hyperledger/fabric/core/ledger/ledgerconfig"
+)
+
+type testEnv struct {
+	t testing.TB
 }
 
-// Store manages the permanent storage of private read-write sets for a namespace
-// TODO add functions for supporting pvtdata related functionality in the ledger interface
-type Store interface {
+func newTestEnv(t *testing.T) *testEnv {
+	testEnv := &testEnv{t}
+	testEnv.cleanup()
+	return testEnv
+}
+
+func (env *testEnv) cleanup() {
+	path := ledgerconfig.GetRootPath()
+	os.RemoveAll(path)
 }
