@@ -59,6 +59,11 @@ func GetTransientStorePath() string {
 	return filepath.Join(GetRootPath(), "transientStore")
 }
 
+// GetPvtWritesetStorePath returns the filesystem path that is used for permanent storage of privare write-sets
+func GetPvtWritesetStorePath() string {
+	return filepath.Join(GetRootPath(), "pvtWritesetStore")
+}
+
 // GetBlockStorePath returns the filesystem path that is used for the chain block stores
 func GetBlockStorePath() string {
 	return filepath.Join(GetRootPath(), "chains")

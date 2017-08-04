@@ -443,13 +443,13 @@ func (m *mockLedger) NewHistoryQueryExecutor() (ledger.HistoryQueryExecutor, err
 }
 
 // GetPvtDataAndBlockByNum retrieves pvt data and block
-func (m *mockLedger) GetPvtDataAndBlockByNum(blockNum uint64, collections []string) (*ledger.PvtDataAndBlock, error) {
+func (m *mockLedger) GetPvtDataAndBlockByNum(blockNum uint64, filter ledger.PvtNsCollFilter) (*ledger.PvtDataAndBlock, error) {
 	args := m.Called()
 	return args.Get(0).(*ledger.PvtDataAndBlock), nil
 }
 
 // GetPvtDataByNum retrieves the pvt data
-func (m *mockLedger) GetPvtDataByNum(blockNum uint64, collections []string) ([]*ledger.TxPvtData, error) {
+func (m *mockLedger) GetPvtDataByNum(blockNum uint64, filter ledger.PvtNsCollFilter) ([]*ledger.TxPvtData, error) {
 	args := m.Called()
 	return args.Get(0).([]*ledger.TxPvtData), nil
 }

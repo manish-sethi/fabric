@@ -46,7 +46,6 @@ func TestKVLedgerBlockStorage(t *testing.T) {
 	bcInfo, _ := ledger.GetBlockchainInfo()
 	testutil.AssertEquals(t, bcInfo, &common.BlockchainInfo{
 		Height: 1, CurrentBlockHash: gbHash, PreviousBlockHash: nil})
-
 	txid := util.GenerateUUID()
 	simulator, _ := ledger.NewTxSimulator(txid)
 	simulator.SetState("ns1", "key1", []byte("value1"))
@@ -113,7 +112,67 @@ func TestKVLedgerBlockStorage(t *testing.T) {
 	// get the transaction validation code for this transaction id
 	validCode, _ := ledger.GetTxValidationCodeByTxID(txID2)
 	testutil.AssertEquals(t, validCode, peer.TxValidationCode_VALID)
+}
 
+func TestKVLedgerBlockStorageWithPvtdata(t *testing.T) {
+	env := newTestEnv(t)
+	defer env.cleanup()
+	provider, _ := NewProvider()
+	defer provider.Close()
+
+	bg, gb := testutil.NewBlockGenerator(t, "testLedger", false)
+	gbHash := gb.Header.Hash()
+	ledger, _ := provider.Create(gb)
+	defer ledger.Close()
+
+	bcInfo, _ := ledger.GetBlockchainInfo()
+	testutil.AssertEquals(t, bcInfo, &common.BlockchainInfo{
+		Height: 1, CurrentBlockHash: gbHash, PreviousBlockHash: nil})
+	txid := util.GenerateUUID()
+	simulator, _ := ledger.NewTxSimulator(txid)
+	simulator.SetState("ns1", "key1", []byte("value1"))
+	simulator.SetPrivateData("ns1", "coll1", "key2", []byte("value2"))
+	simulator.SetPrivateData("ns1", "coll2", "key2", []byte("value3"))
+	simulator.Done()
+	simRes, _ := simulator.GetTxSimulationResults()
+	pubSimBytes, _ := simRes.GetPubSimulationBytes()
+	block1 := bg.NextBlockWithTxid([][]byte{pubSimBytes}, []string{txid})
+	testutil.AssertNoError(t, ledger.Commit(block1), "")
+
+	bcInfo, _ = ledger.GetBlockchainInfo()
+	block1Hash := block1.Header.Hash()
+	testutil.AssertEquals(t, bcInfo, &common.BlockchainInfo{
+		Height: 2, CurrentBlockHash: block1Hash, PreviousBlockHash: gbHash})
+
+	txid = util.GenerateUUID()
+	simulator, _ = ledger.NewTxSimulator(txid)
+	simulator.SetState("ns1", "key1", []byte("value4"))
+	simulator.SetState("ns1", "key2", []byte("value5"))
+	simulator.SetState("ns1", "key3", []byte("value6"))
+	simulator.Done()
+	simRes, _ = simulator.GetTxSimulationResults()
+	pubSimBytes, _ = simRes.GetPubSimulationBytes()
+	block2 := bg.NextBlock([][]byte{pubSimBytes})
+	ledger.Commit(block2)
+
+	bcInfo, _ = ledger.GetBlockchainInfo()
+	block2Hash := block2.Header.Hash()
+	testutil.AssertEquals(t, bcInfo, &common.BlockchainInfo{
+		Height: 3, CurrentBlockHash: block2Hash, PreviousBlockHash: block1Hash})
+
+	pvtdataAndBlock, _ := ledger.GetPvtDataAndBlockByNum(0, nil)
+	testutil.AssertEquals(t, pvtdataAndBlock.Block, gb)
+	testutil.AssertNil(t, pvtdataAndBlock.BlockPvtData)
+
+	pvtdataAndBlock, _ = ledger.GetPvtDataAndBlockByNum(1, nil)
+	testutil.AssertEquals(t, pvtdataAndBlock.Block, block1)
+	testutil.AssertNotNil(t, pvtdataAndBlock.BlockPvtData)
+	testutil.AssertEquals(t, pvtdataAndBlock.BlockPvtData[0].Has("ns1", "coll1"), true)
+	testutil.AssertEquals(t, pvtdataAndBlock.BlockPvtData[0].Has("ns1", "coll2"), true)
+
+	pvtdataAndBlock, _ = ledger.GetPvtDataAndBlockByNum(2, nil)
+	testutil.AssertEquals(t, pvtdataAndBlock.Block, block2)
+	testutil.AssertNil(t, pvtdataAndBlock.BlockPvtData)
 }
 
 func TestKVLedgerDBRecovery(t *testing.T) {

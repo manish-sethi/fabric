@@ -22,14 +22,13 @@ import (
 	"fmt"
 
 	"github.com/golang/protobuf/proto"
-	"github.com/hyperledger/fabric/common/ledger/blkstorage"
-	"github.com/hyperledger/fabric/common/ledger/blkstorage/fsblkstorage"
 	"github.com/hyperledger/fabric/common/ledger/util/leveldbhelper"
 	"github.com/hyperledger/fabric/core/ledger"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/history/historydb"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/history/historydb/historyleveldb"
 	"github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/privacyenabledstate"
 	"github.com/hyperledger/fabric/core/ledger/ledgerconfig"
+	"github.com/hyperledger/fabric/core/ledger/ledgerstorage"
 	"github.com/hyperledger/fabric/core/transientdata"
 	"github.com/hyperledger/fabric/protos/common"
 	"github.com/hyperledger/fabric/protos/utils"
@@ -51,7 +50,7 @@ var (
 // Provider implements interface ledger.PeerLedgerProvider
 type Provider struct {
 	idStore                *idStore
-	blockStoreProvider     blkstorage.BlockStoreProvider
+	ledgerStoreProvider    *ledgerstorage.Provider
 	vdbProvider            privacyenabledstate.DBProvider
 	historydbProvider      historydb.HistoryDBProvider
 	transientStoreProvider transientdata.StoreProvider
@@ -66,26 +65,14 @@ func NewProvider() (ledger.PeerLedgerProvider, error) {
 	// Initialize the ID store (inventory of chainIds/ledgerIds)
 	idStore := openIDStore(ledgerconfig.GetLedgerProviderPath())
 
-	// Initialize the block storage
-	attrsToIndex := []blkstorage.IndexableAttr{
-		blkstorage.IndexableAttrBlockHash,
-		blkstorage.IndexableAttrBlockNum,
-		blkstorage.IndexableAttrTxID,
-		blkstorage.IndexableAttrBlockNumTranNum,
-		blkstorage.IndexableAttrBlockTxID,
-		blkstorage.IndexableAttrTxValidationCode,
-	}
-	indexConfig := &blkstorage.IndexConfig{AttrsToIndex: attrsToIndex}
-	blockStoreProvider := fsblkstorage.NewProvider(
-		fsblkstorage.NewConf(ledgerconfig.GetBlockStorePath(), ledgerconfig.GetMaxBlockfileSize()),
-		indexConfig)
+	ledgerStoreProvider := ledgerstorage.NewProvider()
 
 	// Initialize the versioned database (state database)
 	vdbProvider, err := privacyenabledstate.NewCommonStorageDBProvider()
 	if err != nil {
 		return nil, err
 	}
-	// Initialize the transient store (temporary storage of private rwset
+	// Initialize the transient store (temporary storage of private rwset)
 	transientStoreProvider := transientdata.NewStoreProvider()
 
 	// Initialize the history database (index for history of values by key)
@@ -93,7 +80,7 @@ func NewProvider() (ledger.PeerLedgerProvider, error) {
 	historydbProvider = historyleveldb.NewHistoryDBProvider()
 
 	logger.Info("ledger provider Initialized")
-	provider := &Provider{idStore, blockStoreProvider, vdbProvider, historydbProvider, transientStoreProvider}
+	provider := &Provider{idStore, ledgerStoreProvider, vdbProvider, historydbProvider, transientStoreProvider}
 	provider.recoverUnderConstructionLedger()
 	return provider, nil
 }
@@ -149,7 +136,7 @@ func (provider *Provider) Open(ledgerID string) (ledger.PeerLedger, error) {
 
 func (provider *Provider) openInternal(ledgerID string) (ledger.PeerLedger, error) {
 	// Get the block store for a chain/ledger
-	blockStore, err := provider.blockStoreProvider.OpenBlockStore(ledgerID)
+	blockStore, err := provider.ledgerStoreProvider.Open(ledgerID)
 	if err != nil {
 		return nil, err
 	}
@@ -194,7 +181,7 @@ func (provider *Provider) List() ([]string, error) {
 // Close implements the corresponding method from interface ledger.PeerLedgerProvider
 func (provider *Provider) Close() {
 	provider.idStore.close()
-	provider.blockStoreProvider.Close()
+	provider.ledgerStoreProvider.Close()
 	provider.vdbProvider.Close()
 	provider.historydbProvider.Close()
 	provider.transientStoreProvider.Close()
